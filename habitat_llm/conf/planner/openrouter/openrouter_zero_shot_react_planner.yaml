@@ -1,0 +1,23 @@
+defaults:
+  - /llm@plan_config.llm: openrouter_chat
+  - /instruct@plan_config.instruct: zero_shot_prompt
+
+_target_: 'habitat_llm.planner.ZeroShotReactPlanner'
+_recursive_: False
+_partial_: True
+
+plan_config:
+    replanning_threshold: 50
+    planning_mode: "cot"
+    constrained_generation: False
+    objects_response: True
+    objects_response_include_states: False
+    centralized: False
+    enable_rag: False
+    rag_dataset_dir: ""
+    rag_data_source_name: ""
+    example_type: "react"
+    think_then_constrain: False
+    think_open_tag: "<think>\n"
+    think_close_tag: "</think>\n"
+    think_gate_max_tokens: null

@@ -58,9 +58,18 @@ class Tool(ABC):
     @abstractmethod
     def argument_types(self) -> List[str]:
         raise NotImplementedError()
+    
+    @property
+    @abstractmethod
+    def argument_obj_class_types(self) -> List[str]:
+        raise NotImplementedError()
 
     def grammar(self):
         argument_string = ' "," WS '.join(self.argument_types)
+        return f'"{self.name}[" { argument_string } "]"'
+    
+    def grammar_obj_class(self):
+        argument_string = ' "," WS '.join(self.argument_obj_class_types)
         return f'"{self.name}[" { argument_string } "]"'
 
 

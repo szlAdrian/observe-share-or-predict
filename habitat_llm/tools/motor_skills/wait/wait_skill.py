@@ -97,3 +97,7 @@ class WaitSkill(SkillPolicy):
     @property
     def argument_types(self) -> List[str]:
         return []
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        return self.argument_types

@@ -173,3 +173,12 @@ class FindObjectTool(PerceptionTool):
         :return: List of argument types.
         """
         return [FREE_TEXT]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the MotorSkillTool.
+
+        :return: List of argument types.
+        """
+        return self.argument_types

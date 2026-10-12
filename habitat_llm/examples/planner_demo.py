@@ -20,12 +20,15 @@ from omegaconf import OmegaConf
 sys.path.append("..")
 
 import hydra
-from typing import Dict
+import numpy as np
+from typing import Any, Dict, Optional, Set
 
 from torch import multiprocessing as mp
 
 from habitat_llm.agent.env.evaluation.evaluation_functions import (
     aggregate_measures,
+    aggregate_measures_oaa,
+    aggregate_action_measures
 )
 
 from habitat_llm.utils import cprint, setup_config, fix_config
@@ -44,8 +47,54 @@ from habitat_llm.evaluation import (
     EvaluationRunner,
 )
 from habitat_llm.agent.env.dataset import CollaborationDatasetV0
-from habitat_baselines.utils.info_dict import extract_scalars_from_info
+# from habitat_baselines.utils.info_dict import extract_scalars_from_info
 
+# from habitat_baselines.utils.info_dict for extract_scalars_from_info
+# These metrics are not scalars and cannot be easily reported
+# (unless using videos)
+NON_SCALAR_METRICS = {"top_down_map", "collisions.is_collision"}
+
+# modified from: habitat_baselines.utils.info_dict
+def extract_scalars_from_info(
+    info: Dict[str, Any], ignore_keys: Optional[Set[str]] = None
+) -> Dict[str, float]:
+    r"""From an environment info dictionary, returns a flattened
+    dictionary of string to floats by filtering all non-scalar
+    metrics.
+
+        Args:
+            info: A gym.Env  info dict
+            ignore_keys: The list of info key names to exclude in the result.
+
+        Returns:
+            dictionary of scalar values
+    """
+    if ignore_keys is None:
+        ignore_keys = set()
+    ignore_keys.update(NON_SCALAR_METRICS)
+    result = {}
+    for k, v in info.items():
+        if not isinstance(k, str) or k in ignore_keys:
+            continue
+
+        if isinstance(v, dict):
+            result.update(
+                {
+                    k + "." + subk: subv
+                    for subk, subv in extract_scalars_from_info(v).items()
+                    if isinstance(subk, str)
+                    and k + "." + subk not in ignore_keys
+                }
+            )
+        # Things that are scalar-like will have an np.size of 1.
+        # Strings also have an np.size of 1, so explicitly ban those
+        elif np.size(v) == 1 and not isinstance(v, str):
+            if v is None:
+                result[k] = v
+            else:
+                result[k] = float(v)
+
+    return result
 
 def get_output_file(config, env_interface):
     dataset_file = env_interface.conf.habitat.dataset.data_path.split("/")[-1]
@@ -137,6 +186,16 @@ def run_eval(config):
     # Setup config
     config = setup_config(config, seed)
     dataset = CollaborationDatasetV0(config.habitat.dataset)
+    # print(f'dataset has {len(dataset.episodes)} episodes.')
+    # print(f'dataset: {dataset}')
+    # print(f'dataset episodes: {type(dataset.episodes)}')
+    # print(f'dataset episodes: {dataset.episodes[0]}')
+    # asd
+    #episode_subset = [dataset.episodes[x] for x in [3,5,7,8,12,21,25,29,33]]
+    # episode_subset = (dataset.episodes)[:2]
+    # dataset = CollaborationDatasetV0(
+    #     config=config.habitat.dataset, episodes=episode_subset
+    # )
 
     write_config(config)
     if config.get("resume", False):
@@ -220,19 +279,84 @@ def run_eval(config):
         all_stats_episodes: Dict[str, Dict] = {
             str(i): {} for i in range(config.num_runs_per_episode)
         }
+        all_action_metrics: Dict[str, Dict] = {
+            str(i): {} for i in range(config.num_runs_per_episode)
+            }
+        all_action_obj_in_graph_metrics: Dict[str, Dict] = {
+            str(i): {} for i in range(config.num_runs_per_episode)
+            }
+        all_action_curr_next_metrics: Dict[str, Dict] = {
+            str(i): {} for i in range(config.num_runs_per_episode)
+            }
+
         for conn, proc in proc_infos:
-            stats_episodes = conn.recv()
+            if config.evaluation.get("predict_other_agent_actions", False):
+                stats_episodes, action_metrics, action_obj_in_graph_metrics, action_curr_next_metrics = conn.recv()
+            else:
+                stats_episodes = conn.recv()
             for run_id, stats_run in stats_episodes.items():
                 all_stats_episodes[str(run_id)].update(stats_run)
+                if config.evaluation.get("predict_other_agent_actions", False):
+                    all_action_metrics[str(run_id)].update(action_metrics[str(run_id)])
+                    all_action_obj_in_graph_metrics[str(run_id)].update(action_obj_in_graph_metrics[str(run_id)])
+                    all_action_curr_next_metrics[str(run_id)].update(action_curr_next_metrics[str(run_id)])
             proc.join()
 
-        all_metrics = aggregate_measures(
-            {run_id: aggregate_measures(v) for run_id, v in all_stats_episodes.items()}
+        if config.evaluation.get("predict_other_agent_actions", False):
+            agg_measures = aggregate_measures_oaa
+            
+            if config.evaluation.get("predict_other_agent_actions", False) and all_action_metrics != {}:    
+                all_aggregated_action_metrics = aggregate_action_measures(
+                    {run_id: aggregate_action_measures(v) for run_id, v in all_action_metrics.items()}
+                )
+            
+                file_path_all_action_metrics_json = config.paths.end_action_result_file_path
+                
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_all_action_metrics_json), exist_ok=True)
+                        
+                with open(file_path_all_action_metrics_json, "w+") as file:
+                    file.write(json.dumps(all_aggregated_action_metrics))
+                    
+            if config.evaluation.get("predict_other_agent_actions", False) and all_action_obj_in_graph_metrics != {}:    
+                all_aggregated_action_obj_in_graph_metrics = aggregate_action_measures(
+                    {run_id: aggregate_action_measures(v, is_obj_in_graph = True) for run_id, v in all_action_obj_in_graph_metrics.items()}, is_obj_in_graph = True
+                )
+            
+                file_path_all_action_obj_in_graph_metrics_json = config.paths.end_action_obj_in_graph_result_file_path
+                
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_all_action_obj_in_graph_metrics_json), exist_ok=True)
+                        
+                with open(file_path_all_action_obj_in_graph_metrics_json, "w+") as file:
+                    file.write(json.dumps(all_aggregated_action_obj_in_graph_metrics))
+            
+            if config.evaluation.get("predict_other_agent_actions", False) and all_action_curr_next_metrics != {}:    
+                all_aggregated_action_curr_next_metrics = aggregate_action_measures(
+                    {run_id: aggregate_action_measures(v) for run_id, v in all_action_curr_next_metrics.items()}
+                )
+        
+                file_path_all_action_curr_next_metrics_json = config.paths.end_action_curr_next_result_file_path
+                
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_all_action_curr_next_metrics_json), exist_ok=True)
+                        
+                with open(file_path_all_action_curr_next_metrics_json, "w+") as file:
+                    file.write(json.dumps(all_aggregated_action_curr_next_metrics))
+                    
+        else:
+            agg_measures = aggregate_measures
+            
+        all_metrics = agg_measures(
+            {run_id: agg_measures(v) for run_id, v in all_stats_episodes.items()}
         )
         cprint("\n---------------------------------", "blue")
         cprint("Metrics Across All Runs:", "blue")
         for k, v in all_metrics.items():
-            cprint(f"{k}: {v:.3f}", "blue")
+            if v is not None and isinstance(v, (int, float)):
+                cprint(f"{k}: {v:.3f}", "blue")
+            else:
+                cprint(f"{k}: {v}", "blue")
         cprint("\n---------------------------------", "blue")
         # Write aggregated results across experiment
         write_to_csv(config.paths.end_result_file_path, all_metrics)
@@ -315,6 +439,14 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
     cprint("---------------------------------------\n", "blue")
 
     os.makedirs(config.paths.results_dir, exist_ok=True)
+    
+    if config.evaluation.get("predict_other_agent_actions", False):
+        agg_measures = aggregate_measures_oaa
+        action_metrics = {str(i): {} for i in range(config.num_runs_per_episode)}
+        action_metrics_obj_in_graph = {str(i): {} for i in range(config.num_runs_per_episode)}
+        action_metrics_curr_next = {str(i): {} for i in range(config.num_runs_per_episode)}
+    else:
+        agg_measures = aggregate_measures
 
     # Run the planner
     if config.mode == "cli":
@@ -367,6 +499,422 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                             stats_keys.add(f"replanning_count_{agent_id}")
                             info[f"replanning_count_{agent_id}"] = replan_count
 
+                    # add reasoning_about_other_agent_count to stats_keys as scalars if reasoning_about_other_agent_count is a dict
+                    if "reasoning_about_other_agent_count" in info and isinstance(
+                        info["reasoning_about_other_agent_count"], dict
+                    ):
+                        for agent_id, reasoning_about_other_agent_count in info["reasoning_about_other_agent_count"].items():
+                            stats_keys.add(f"reasoning_about_other_agent_count_{agent_id}")
+                            info[f"reasoning_about_other_agent_count_{agent_id}"] = reasoning_about_other_agent_count
+                    
+                    # add total oaa pred count to stats_keys as scalars if oaa_total_pred_count is a dict
+                    if "oaa_total_pred_count" in info and isinstance(
+                        info["oaa_total_pred_count"], dict
+                    ):
+                        for agent_id, oaa_total_pred_count in info["oaa_total_pred_count"].items():
+                            stats_keys.add(f"oaa_total_pred_count_{agent_id}")
+                            info[f"oaa_total_pred_count_{agent_id}"] = oaa_total_pred_count
+
+                    # add total oaa pred count to stats_keys as scalars if oaa_total_pred_count is a dict
+                    if "oa_not_done_pred_count" in info and isinstance(
+                        info["oa_not_done_pred_count"], dict
+                    ):
+                        for agent_id, oa_not_done_pred_count in info["oa_not_done_pred_count"].items():
+                            stats_keys.add(f"oa_not_done_pred_count_{agent_id}")
+                            info[f"oa_not_done_pred_count_{agent_id}"] = oa_not_done_pred_count
+                    
+                    # add correct oaa action pred count to stats_keys as scalars if oaa_correct_action_pred_count is a dict
+                    if "oaa_correct_action_pred_count" in info and isinstance(
+                        info["oaa_correct_action_pred_count"], dict
+                    ):
+                        for agent_id, oaa_correct_action_pred_count in info["oaa_correct_action_pred_count"].items():
+                            stats_keys.add(f"oaa_correct_action_pred_count_{agent_id}")
+                            info[f"oaa_correct_action_pred_count_{agent_id}"] = oaa_correct_action_pred_count
+
+                    # add oaa action pred accuracy to stats_keys as scalars if oaa_pred_action_accuracy is a dict
+                    if "oaa_pred_action_accuracy" in info and isinstance(
+                        info["oaa_pred_action_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_action_accuracy in info["oaa_pred_action_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_action_accuracy_{agent_id}")
+                            info[f"oaa_pred_action_accuracy_{agent_id}"] = oaa_pred_action_accuracy
+
+                    # add correct oaa principal pred count to stats_keys as scalars if oaa_correct_principal_pred_count is a dict
+                    if "oaa_correct_principal_pred_count" in info and isinstance(
+                        info["oaa_correct_principal_pred_count"], dict
+                    ):
+                        for agent_id, oaa_correct_principal_pred_count in info["oaa_correct_principal_pred_count"].items():
+                            stats_keys.add(f"oaa_correct_principal_pred_count_{agent_id}")
+                            info[f"oaa_correct_principal_pred_count_{agent_id}"] = oaa_correct_principal_pred_count
+
+                    # add oaa principal pred accuracy to stats_keys as scalars if oaa_pred_principal_accuracy is a dict
+                    if "oaa_pred_principal_accuracy" in info and isinstance(
+                        info["oaa_pred_principal_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_principal_accuracy in info["oaa_pred_principal_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_principal_accuracy_{agent_id}")
+                            info[f"oaa_pred_principal_accuracy_{agent_id}"] = oaa_pred_principal_accuracy
+
+                    # add correct oaa action principal pred count to stats_keys as scalars if oaa_correct_action_principal_pred_count is a dict
+                    if "oaa_correct_action_principal_pred_count" in info and isinstance(
+                        info["oaa_correct_action_principal_pred_count"], dict
+                    ):
+                        for agent_id, oaa_correct_action_principal_pred_count in info["oaa_correct_action_principal_pred_count"].items():
+                            stats_keys.add(f"oaa_correct_action_principal_pred_count_{agent_id}")
+                            info[f"oaa_correct_action_principal_pred_count_{agent_id}"] = oaa_correct_action_principal_pred_count
+
+                    # add oaa action principal pred accuracy to stats_keys as scalars if oaa_pred_action_principal_accuracy is a dict
+                    if "oaa_pred_action_principal_accuracy" in info and isinstance(
+                        info["oaa_pred_action_principal_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_action_principal_accuracy in info["oaa_pred_action_principal_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_action_principal_accuracy_{agent_id}")
+                            info[f"oaa_pred_action_principal_accuracy_{agent_id}"] = oaa_pred_action_principal_accuracy
+
+                    # add correct oaa all args pred count to stats_keys as scalars if oaa_correct_all_args_pred_count is a dict
+                    if "oaa_correct_all_args_pred_count" in info and isinstance(
+                        info["oaa_correct_all_args_pred_count"], dict
+                    ):
+                        for agent_id, oaa_correct_all_args_pred_count in info["oaa_correct_all_args_pred_count"].items():
+                            stats_keys.add(f"oaa_correct_all_args_pred_count_{agent_id}")
+                            info[f"oaa_correct_all_args_pred_count_{agent_id}"] = oaa_correct_all_args_pred_count
+
+                    # add oaa all args pred accuracy to stats_keys as scalars if oaa_pred_all_args_accuracy is a dict
+                    if "oaa_pred_all_args_accuracy" in info and isinstance(
+                        info["oaa_pred_all_args_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_all_args_accuracy in info["oaa_pred_all_args_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_all_args_accuracy_{agent_id}")
+                            info[f"oaa_pred_all_args_accuracy_{agent_id}"] = oaa_pred_all_args_accuracy
+
+                    # add correct oaa action all args pred count to stats_keys as scalars if oaa_correct_action_all_args_pred_count is a dict
+                    if "oaa_correct_action_all_args_pred_count" in info and isinstance(
+                        info["oaa_correct_action_all_args_pred_count"], dict
+                    ):
+                        for agent_id, oaa_correct_action_all_args_pred_count in info["oaa_correct_action_all_args_pred_count"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_pred_count_{agent_id}")
+                            info[f"oaa_correct_action_all_args_pred_count_{agent_id}"] = oaa_correct_action_all_args_pred_count
+                            
+                    # add oaa action all args pred accuracy to stats_keys as scalars if oaa_pred_action_all_args_accuracy is a dict
+                    if "oaa_pred_action_all_args_accuracy" in info and isinstance(
+                        info["oaa_pred_action_all_args_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_action_all_args_accuracy in info["oaa_pred_action_all_args_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_action_all_args_accuracy_{agent_id}")
+                            info[f"oaa_pred_action_all_args_accuracy_{agent_id}"] = oaa_pred_action_all_args_accuracy                    
+                    
+                    # add oaa pred match success execution count to stats_keys as scalars if oaa_pred_match_success_execution_count is a dict
+                    if "oaa_pred_match_success_execution_count" in info and isinstance(
+                        info["oaa_pred_match_success_execution_count"], dict
+                    ):
+                        for agent_id, oaa_pred_match_success_execution_count in info["oaa_pred_match_success_execution_count"].items():
+                            stats_keys.add(f"oaa_pred_match_success_execution_count_{agent_id}")
+                            info[f"oaa_pred_match_success_execution_count_{agent_id}"] = oaa_pred_match_success_execution_count
+                    
+                    # add oaa pred match success execution accuracy to stats_keys as scalars if oaa_pred_match_success_execution_accuracy is a dict
+                    if "oaa_pred_match_success_execution_accuracy" in info and isinstance(
+                        info["oaa_pred_match_success_execution_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_match_success_execution_accuracy in info["oaa_pred_match_success_execution_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_match_success_execution_accuracy_{agent_id}")
+                            info[f"oaa_pred_match_success_execution_accuracy_{agent_id}"] = oaa_pred_match_success_execution_accuracy
+                    
+                    # add oaa pred unmatch success execution count to stats_keys as scalars if oaa_pred_unmatch_success_execution_count is a dict
+                    if "oaa_pred_unmatch_success_execution_count" in info and isinstance(
+                        info["oaa_pred_unmatch_success_execution_count"], dict
+                    ):
+                        for agent_id, oaa_pred_unmatch_success_execution_count in info["oaa_pred_unmatch_success_execution_count"].items():
+                            stats_keys.add(f"oaa_pred_unmatch_success_execution_count_{agent_id}")
+                            info[f"oaa_pred_unmatch_success_execution_count_{agent_id}"] = oaa_pred_unmatch_success_execution_count
+                    
+                    # add oaa pred unmatch success execution accuracy to stats_keys as scalars if oaa_pred_unmatch_success_execution_accuracy is a dict
+                    if "oaa_pred_unmatch_success_execution_accuracy" in info and isinstance(
+                        info["oaa_pred_unmatch_success_execution_accuracy"], dict
+                    ):
+                        for agent_id, oaa_pred_unmatch_success_execution_accuracy in info["oaa_pred_unmatch_success_execution_accuracy"].items():
+                            stats_keys.add(f"oaa_pred_unmatch_success_execution_accuracy_{agent_id}")
+                            info[f"oaa_pred_unmatch_success_execution_accuracy_{agent_id}"] = oaa_pred_unmatch_success_execution_accuracy
+                    
+                    if "oaa_correct_action_principal_if_action_pred_accuracy" in info and isinstance(
+                        info["oaa_correct_action_principal_if_action_pred_accuracy"], dict):
+                        for agent_id, oaa_correct_action_principal_if_action_pred_accuracy in info["oaa_correct_action_principal_if_action_pred_accuracy"].items():
+                            stats_keys.add(f"oaa_correct_action_principal_if_action_pred_accuracy_{agent_id}")
+                            info[f"oaa_correct_action_principal_if_action_pred_accuracy_{agent_id}"] = oaa_correct_action_principal_if_action_pred_accuracy
+                    
+                    if "oaa_correct_action_all_args_if_action_pred_accuracy" in info and isinstance(
+                        info["oaa_correct_action_all_args_if_action_pred_accuracy"], dict):
+                        for agent_id, oaa_correct_action_all_args_if_action_pred_accuracy in info["oaa_correct_action_all_args_if_action_pred_accuracy"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_if_action_pred_accuracy_{agent_id}")
+                            info[f"oaa_correct_action_all_args_if_action_pred_accuracy_{agent_id}"] = oaa_correct_action_all_args_if_action_pred_accuracy
+                    
+                    if "oaa_correct_action_all_args_pred_not_done_count" in info and isinstance(
+                        info["oaa_correct_action_all_args_pred_not_done_count"], dict):
+                        for agent_id, oaa_correct_action_all_args_pred_not_done_count in info["oaa_correct_action_all_args_pred_not_done_count"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_pred_not_done_count_{agent_id}")
+                            info[f"oaa_correct_action_all_args_pred_not_done_count_{agent_id}"] = oaa_correct_action_all_args_pred_not_done_count
+                    
+                    if config.evaluation.get("predict_other_agent_actions", False) and "per_action_metrics" in info and isinstance(
+                        info["per_action_metrics"], dict):
+                        action_metrics[str(run_id)][episode_id] = info["per_action_metrics"]
+                              
+                    # other replanned _obj_in_graph metrics
+                    
+                    if "oaa_total_pred_count_obj_in_graph" in info and isinstance(
+                        info["oaa_total_pred_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_total_pred_count in info["oaa_total_pred_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_total_pred_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_total_pred_count_obj_in_graph_{agent_id}"] = oaa_total_pred_count
+
+                    if "oaa_correct_action_pred_count_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_action_pred_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_correct_action_pred_count in info["oaa_correct_action_pred_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_action_pred_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_action_pred_count_obj_in_graph_{agent_id}"] = oaa_correct_action_pred_count
+
+                    if "oaa_pred_action_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_action_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_action_accuracy in info["oaa_pred_action_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_action_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_action_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_action_accuracy
+
+                    if "oaa_correct_principal_pred_count_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_principal_pred_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_correct_principal_pred_count in info["oaa_correct_principal_pred_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_principal_pred_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_principal_pred_count_obj_in_graph_{agent_id}"] = oaa_correct_principal_pred_count
+
+                    if "oaa_pred_principal_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_principal_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_principal_accuracy in info["oaa_pred_principal_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_principal_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_principal_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_principal_accuracy
+
+                    if "oaa_correct_action_principal_pred_count_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_action_principal_pred_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_correct_action_principal_pred_count in info["oaa_correct_action_principal_pred_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_action_principal_pred_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_action_principal_pred_count_obj_in_graph_{agent_id}"] = oaa_correct_action_principal_pred_count
+
+                    if "oaa_pred_action_principal_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_action_principal_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_action_principal_accuracy in info["oaa_pred_action_principal_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_action_principal_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_action_principal_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_action_principal_accuracy
+
+                    if "oaa_correct_all_args_pred_count_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_all_args_pred_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_correct_all_args_pred_count in info["oaa_correct_all_args_pred_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_all_args_pred_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_all_args_pred_count_obj_in_graph_{agent_id}"] = oaa_correct_all_args_pred_count
+
+                    if "oaa_pred_all_args_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_all_args_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_all_args_accuracy in info["oaa_pred_all_args_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_all_args_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_all_args_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_all_args_accuracy
+
+                    if "oaa_correct_action_all_args_pred_count_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_action_all_args_pred_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_correct_action_all_args_pred_count in info["oaa_correct_action_all_args_pred_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}"] = oaa_correct_action_all_args_pred_count
+                            
+                    if "oaa_pred_action_all_args_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_action_all_args_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_action_all_args_accuracy in info["oaa_pred_action_all_args_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_action_all_args_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_action_all_args_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_action_all_args_accuracy                    
+                
+                    if "oaa_pred_match_success_execution_count_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_match_success_execution_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_match_success_execution_count in info["oaa_pred_match_success_execution_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_match_success_execution_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_match_success_execution_count_obj_in_graph_{agent_id}"] = oaa_pred_match_success_execution_count
+                    
+                    if "oaa_pred_match_success_execution_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_match_success_execution_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_match_success_execution_accuracy in info["oaa_pred_match_success_execution_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_match_success_execution_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_match_success_execution_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_match_success_execution_accuracy
+                    
+                    if "oaa_pred_unmatch_success_execution_count_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_unmatch_success_execution_count_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_unmatch_success_execution_count in info["oaa_pred_unmatch_success_execution_count_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_unmatch_success_execution_count_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_unmatch_success_execution_count_obj_in_graph_{agent_id}"] = oaa_pred_unmatch_success_execution_count
+                    
+                    if "oaa_pred_unmatch_success_execution_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_pred_unmatch_success_execution_accuracy_obj_in_graph"], dict
+                    ):
+                        for agent_id, oaa_pred_unmatch_success_execution_accuracy in info["oaa_pred_unmatch_success_execution_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_pred_unmatch_success_execution_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_pred_unmatch_success_execution_accuracy_obj_in_graph_{agent_id}"] = oaa_pred_unmatch_success_execution_accuracy
+                    
+                    if "oaa_correct_action_principal_if_action_pred_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_action_principal_if_action_pred_accuracy_obj_in_graph"], dict):
+                        for agent_id, oaa_correct_action_principal_if_action_pred_accuracy in info["oaa_correct_action_principal_if_action_pred_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_action_principal_if_action_pred_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_action_principal_if_action_pred_accuracy_obj_in_graph_{agent_id}"] = oaa_correct_action_principal_if_action_pred_accuracy
+                    
+                    if "oaa_correct_action_all_args_if_action_pred_accuracy_obj_in_graph" in info and isinstance(
+                        info["oaa_correct_action_all_args_if_action_pred_accuracy_obj_in_graph"], dict):
+                        for agent_id, oaa_correct_action_all_args_if_action_pred_accuracy in info["oaa_correct_action_all_args_if_action_pred_accuracy_obj_in_graph"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_if_action_pred_accuracy_obj_in_graph_{agent_id}")
+                            info[f"oaa_correct_action_all_args_if_action_pred_accuracy_obj_in_graph_{agent_id}"] = oaa_correct_action_all_args_if_action_pred_accuracy
+                    
+                    if config.evaluation.get("predict_other_agent_actions", False) and "per_action_metrics_obj_in_graph" in info and isinstance(
+                        info["per_action_metrics_obj_in_graph"], dict):
+                        action_metrics_obj_in_graph[str(run_id)][episode_id] = info["per_action_metrics_obj_in_graph"]
+                    
+                    # _curr_next metrics
+                    
+
+                    if "oaa_correct_action_pred_count_curr_next" in info and isinstance(
+                        info["oaa_correct_action_pred_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_correct_action_pred_count in info["oaa_correct_action_pred_count_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_action_pred_count_curr_next_{agent_id}")
+                            info[f"oaa_correct_action_pred_count_curr_next_{agent_id}"] = oaa_correct_action_pred_count
+
+                    if "oaa_pred_action_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_action_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_action_accuracy in info["oaa_pred_action_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_action_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_action_accuracy_curr_next_{agent_id}"] = oaa_pred_action_accuracy
+
+                    if "oaa_correct_principal_pred_count_curr_next" in info and isinstance(
+                        info["oaa_correct_principal_pred_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_correct_principal_pred_count in info["oaa_correct_principal_pred_count_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_principal_pred_count_curr_next_{agent_id}")
+                            info[f"oaa_correct_principal_pred_count_curr_next_{agent_id}"] = oaa_correct_principal_pred_count
+
+                    if "oaa_pred_principal_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_principal_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_principal_accuracy in info["oaa_pred_principal_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_principal_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_principal_accuracy_curr_next_{agent_id}"] = oaa_pred_principal_accuracy
+
+                    if "oaa_correct_action_principal_pred_count_curr_next" in info and isinstance(
+                        info["oaa_correct_action_principal_pred_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_correct_action_principal_pred_count in info["oaa_correct_action_principal_pred_count_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_action_principal_pred_count_curr_next_{agent_id}")
+                            info[f"oaa_correct_action_principal_pred_count_curr_next_{agent_id}"] = oaa_correct_action_principal_pred_count
+
+                    if "oaa_pred_action_principal_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_action_principal_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_action_principal_accuracy in info["oaa_pred_action_principal_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_action_principal_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_action_principal_accuracy_curr_next_{agent_id}"] = oaa_pred_action_principal_accuracy
+
+                    if "oaa_correct_all_args_pred_count_curr_next" in info and isinstance(
+                        info["oaa_correct_all_args_pred_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_correct_all_args_pred_count in info["oaa_correct_all_args_pred_count_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_all_args_pred_count_curr_next_{agent_id}")
+                            info[f"oaa_correct_all_args_pred_count_curr_next_{agent_id}"] = oaa_correct_all_args_pred_count
+
+                    if "oaa_pred_all_args_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_all_args_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_all_args_accuracy in info["oaa_pred_all_args_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_all_args_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_all_args_accuracy_curr_next_{agent_id}"] = oaa_pred_all_args_accuracy
+
+                    if "oaa_correct_action_all_args_pred_count_curr_next" in info and isinstance(
+                        info["oaa_correct_action_all_args_pred_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_correct_action_all_args_pred_count in info["oaa_correct_action_all_args_pred_count_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_pred_count_curr_next_{agent_id}")
+                            info[f"oaa_correct_action_all_args_pred_count_curr_next_{agent_id}"] = oaa_correct_action_all_args_pred_count
+
+                    if "oaa_pred_action_all_args_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_action_all_args_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_action_all_args_accuracy in info["oaa_pred_action_all_args_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_action_all_args_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_action_all_args_accuracy_curr_next_{agent_id}"] = oaa_pred_action_all_args_accuracy                    
+                
+                    if "oaa_pred_match_success_execution_count_curr_next" in info and isinstance(
+                        info["oaa_pred_match_success_execution_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_match_success_execution_count in info["oaa_pred_match_success_execution_count_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_match_success_execution_count_curr_next_{agent_id}")
+                            info[f"oaa_pred_match_success_execution_count_curr_next_{agent_id}"] = oaa_pred_match_success_execution_count
+                    
+                    if "oaa_pred_match_success_execution_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_match_success_execution_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_match_success_execution_accuracy in info["oaa_pred_match_success_execution_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_match_success_execution_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_match_success_execution_accuracy_curr_next_{agent_id}"] = oaa_pred_match_success_execution_accuracy
+                    
+                    if "oaa_pred_unmatch_success_execution_count_curr_next" in info and isinstance(
+                        info["oaa_pred_unmatch_success_execution_count_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_unmatch_success_execution_count in info["oaa_pred_unmatch_success_execution_count_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_unmatch_success_execution_count_curr_next_{agent_id}")
+                            info[f"oaa_pred_unmatch_success_execution_count_curr_next_{agent_id}"] = oaa_pred_unmatch_success_execution_count
+                    
+                    if "oaa_pred_unmatch_success_execution_accuracy_curr_next" in info and isinstance(
+                        info["oaa_pred_unmatch_success_execution_accuracy_curr_next"], dict
+                    ):
+                        for agent_id, oaa_pred_unmatch_success_execution_accuracy in info["oaa_pred_unmatch_success_execution_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_pred_unmatch_success_execution_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_pred_unmatch_success_execution_accuracy_curr_next_{agent_id}"] = oaa_pred_unmatch_success_execution_accuracy
+                    
+                    if "oaa_correct_action_principal_if_action_pred_accuracy_curr_next" in info and isinstance(
+                        info["oaa_correct_action_principal_if_action_pred_accuracy_curr_next"], dict):
+                        for agent_id, oaa_correct_action_principal_if_action_pred_accuracy in info["oaa_correct_action_principal_if_action_pred_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_action_principal_if_action_pred_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_correct_action_principal_if_action_pred_accuracy_curr_next_{agent_id}"] = oaa_correct_action_principal_if_action_pred_accuracy
+                    
+                    if "oaa_correct_action_all_args_if_action_pred_accuracy_curr_next" in info and isinstance(
+                        info["oaa_correct_action_all_args_if_action_pred_accuracy_curr_next"], dict):
+                        for agent_id, oaa_correct_action_all_args_if_action_pred_accuracy in info["oaa_correct_action_all_args_if_action_pred_accuracy_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_if_action_pred_accuracy_curr_next_{agent_id}")
+                            info[f"oaa_correct_action_all_args_if_action_pred_accuracy_curr_next_{agent_id}"] = oaa_correct_action_all_args_if_action_pred_accuracy
+
+                    if "oaa_correct_action_all_args_pred_not_done_count_curr_next" in info and isinstance(
+                        info["oaa_correct_action_all_args_pred_not_done_count_curr_next"], dict):
+                        for agent_id, oaa_correct_action_all_args_pred_not_done_count in info["oaa_correct_action_all_args_pred_not_done_count_curr_next"].items():
+                            stats_keys.add(f"oaa_correct_action_all_args_pred_not_done_count_curr_next_{agent_id}")
+                            info[f"oaa_correct_action_all_args_pred_not_done_count_curr_next_{agent_id}"] = oaa_correct_action_all_args_pred_not_done_count
+
+                    if config.evaluation.get("predict_other_agent_actions", False) and "per_action_metrics_curr_next" in info and isinstance(
+                        info["per_action_metrics_curr_next"], dict):
+                        action_metrics_curr_next[str(run_id)][episode_id] = info["per_action_metrics_curr_next"]
+                    
+                    # if "per_action_metrics" in info and isinstance(
+                    #     info["per_action_metrics"], dict):
+                    #     for agent_id, agent_metrics in info["per_action_metrics"].items():
+                    #         for action_name, action_metrics in agent_metrics.items():
+                    #             for metric_name, metric_value in action_metrics.items():
+                    #                 stats_keys.add(f"action_{action_name}_{metric_name}_{agent_id}")
+                    #                 info[f"action_{action_name}_{metric_name}_{agent_id}"] = metric_value
+                    
+                    # print('**********************************')
+                    # print(f'info:  {info}')
+                    # print(f'stats_keys: {stats_keys}')
+                    # print('**********************************')
                     stats_episode = extract_scalars_from_info(
                         info, ignore_keys=info.keys() - stats_keys
                     )
@@ -375,7 +923,10 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                     cprint("\n---------------------------------", "blue")
                     cprint(f"Metrics For Run {run_id} Episode {episode_id}:", "blue")
                     for k, v in stats_episodes[str(run_id)][episode_id].items():
-                        cprint(f"{k}: {v:.3f}", "blue")
+                        if v is not None and isinstance(v, (int, float)):
+                            cprint(f"{k}: {v:.3f}", "blue")
+                        else:
+                            cprint(f"{k}: {v}", "blue")
                     cprint("\n---------------------------------", "blue")
                     # Log results onto a CSV
                     epi_metrics = stats_episodes[str(run_id)][episode_id] | info_episode
@@ -405,30 +956,118 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                 eval_runner.reset()
 
             # aggregate metrics across the current run.
-            run_metrics = aggregate_measures(stats_episodes[str(run_id)])
+            run_metrics = agg_measures(stats_episodes[str(run_id)])
             cprint("\n---------------------------------", "blue")
             cprint(f"Metrics For Run {run_id}:", "blue")
             for k, v in run_metrics.items():
-                cprint(f"{k}: {v:.3f}", "blue")
+                if v is not None and isinstance(v, (int, float)):
+                    cprint(f"{k}: {v:.3f}", "blue")
+                else:
+                    cprint(f"{k}: {v}", "blue")
             cprint("\n---------------------------------", "blue")
 
             # Write aggregated results across run
             write_to_csv(config.paths.run_result_file_path, run_metrics)
+            
+            if config.evaluation.get("predict_other_agent_actions", False) and "per_action_metrics" in info and isinstance(
+                info["per_action_metrics"], dict):
+                
+                run_action_metrics = aggregate_action_measures(action_metrics[str(run_id)])
+                
+                file_path_action_metrics_json = config.paths.run_action_result_file_path
+                        
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_action_metrics_json), exist_ok=True)
+                        
+                with open(file_path_action_metrics_json, "a") as file:
+                    file.write(json.dumps(run_action_metrics))
+                    
+            if config.evaluation.get("predict_other_agent_actions", False) and "per_action_metrics_obj_in_graph" in info and isinstance(
+                info["per_action_metrics_obj_in_graph"], dict):
+                
+                run_action_obj_in_graph_metrics = aggregate_action_measures(action_metrics_obj_in_graph[str(run_id)], is_obj_in_graph = True)
+                
+                file_path_action_obj_in_graph_metrics_json = config.paths.run_action_obj_in_graph_result_file_path
+                        
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_action_obj_in_graph_metrics_json), exist_ok=True)
+                        
+                with open(file_path_action_obj_in_graph_metrics_json, "a") as file:
+                    file.write(json.dumps(run_action_obj_in_graph_metrics))
+            
+            if config.evaluation.get("predict_other_agent_actions", False) and "per_action_metrics_curr_next" in info and isinstance(
+                info["per_action_metrics_curr_next"], dict):
+                
+                run_action_curr_next_metrics = aggregate_action_measures(action_metrics_curr_next[str(run_id)])
+                
+                file_path_action_curr_next_metrics_json = config.paths.run_action_curr_next_result_file_path
+                        
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_action_curr_next_metrics_json), exist_ok=True)
+                        
+                with open(file_path_action_curr_next_metrics_json, "a") as file:
+                    file.write(json.dumps(run_action_curr_next_metrics))
 
         # aggregate metrics across all runs.
         if conn is None:
-            all_metrics = aggregate_measures(
-                {run_id: aggregate_measures(v) for run_id, v in stats_episodes.items()}
+            all_metrics = agg_measures(
+                {run_id: agg_measures(v) for run_id, v in stats_episodes.items()}
             )
             cprint("\n---------------------------------", "blue")
             cprint("Metrics Across All Runs:", "blue")
             for k, v in all_metrics.items():
-                cprint(f"{k}: {v:.3f}", "blue")
+                if v is not None and isinstance(v, (int, float)):
+                    cprint(f"{k}: {v:.3f}", "blue")
+                else:
+                    cprint(f"{k}: {v}", "blue")
             cprint("\n---------------------------------", "blue")
             # Write aggregated results across experiment
             write_to_csv(config.paths.end_result_file_path, all_metrics)
+            
+            if config.evaluation.get("predict_other_agent_actions", False) and action_metrics != {}:
+                all_action_metrics = aggregate_action_measures(
+                    {run_id: aggregate_action_measures(v) for run_id, v in action_metrics.items()}
+                )
+        
+                file_path_all_action_metrics_json = config.paths.end_action_result_file_path
+               
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_all_action_metrics_json), exist_ok=True)
+                        
+                with open(file_path_all_action_metrics_json, "w+") as file:
+                    file.write(json.dumps(all_action_metrics))
+                    
+            if config.evaluation.get("predict_other_agent_actions", False) and action_metrics_obj_in_graph != {}:
+                all_action_obj_in_graph_metrics = aggregate_action_measures(
+                    {run_id: aggregate_action_measures(v, is_obj_in_graph = True) for run_id, v in action_metrics_obj_in_graph.items()}, is_obj_in_graph = True
+                )
+        
+                file_path_all_action_obj_in_graph_metrics_json = config.paths.end_action_obj_in_graph_result_file_path
+               
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_all_action_obj_in_graph_metrics_json), exist_ok=True)
+                        
+                with open(file_path_all_action_obj_in_graph_metrics_json, "w+") as file:
+                    file.write(json.dumps(all_action_obj_in_graph_metrics))
+            
+            if config.evaluation.get("predict_other_agent_actions", False) and action_metrics_curr_next != {}:
+                all_action_curr_next_metrics = aggregate_action_measures(
+                    {run_id: aggregate_action_measures(v) for run_id, v in action_metrics_curr_next.items()}
+                )
+        
+                file_path_all_action_curr_next_metrics_json = config.paths.end_action_curr_next_result_file_path
+        
+                # Make directory if it doesn't exists already
+                os.makedirs(os.path.dirname(file_path_all_action_curr_next_metrics_json), exist_ok=True)
+                        
+                with open(file_path_all_action_curr_next_metrics_json, "w+") as file:
+                    file.write(json.dumps(all_action_curr_next_metrics))
+             
         else:
-            conn.send(stats_episodes)
+            if config.evaluation.get("predict_other_agent_actions", False):
+                conn.send((stats_episodes, action_metrics, action_metrics_obj_in_graph, action_metrics_curr_next))
+            else:
+                conn.send(stats_episodes)
 
     env_interface.env.close()
     del env_interface

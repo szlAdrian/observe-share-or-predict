@@ -1,0 +1,98 @@
+llm:
+  _target_    : habitat_llm.llm.VLLMModel
+  _partial_   : True
+
+# vLLM server configuration.
+# Start the vLLM server yourself before running the agent (it's a separate
+# process/env from habitat-llm — see INSTALLATION.md, "Set up a vLLM server").
+#
+# 8B, full precision:
+#   python -m vllm.entrypoints.openai.api_server \
+#     --model meta-llama/Meta-Llama-3.1-8B-Instruct \
+#     --served-model-name Meta-Llama-3.1-8B-Instruct \
+#     --tensor-parallel-size 1 --gpu-memory-utilization 0.9 \
+#     --guided-decoding-backend xgrammar \
+#     --host 0.0.0.0 --port 8000
+#
+# 70B, bitsandbytes 4-bit (on-the-fly quantization of a standard checkpoint,
+# tensor-parallel across 2 GPUs; --max-model-len keeps the KV cache reservation
+# sized for this app's actual usage instead of the model's full context, to
+# avoid OOM during CUDA graph capture / sampler warmup):
+#   python -m vllm.entrypoints.openai.api_server \
+#     --model meta-llama/Meta-Llama-3.1-70B-Instruct \
+#     --served-model-name Meta-Llama-3.1-70B-Instruct \
+#     --quantization bitsandbytes --load-format bitsandbytes \
+#     --tensor-parallel-size 2 --gpu-memory-utilization 0.85 \
+#     --max-model-len 16384 \
+#     --guided-decoding-backend xgrammar \
+#     --host 0.0.0.0 --port 8000
+#
+# `--guided-decoding-backend xgrammar` is required for constrained_generation
+# (grammar-constrained ReAct baselines) to be enforced by vLLM itself; needs
+# vLLM >= 0.6.5. Without it, grammar-constrained requests fall back to a full
+# HF model load (see hf_fallback_model / load_in_4bit below).
+# `generation_params.engine` below must match --served-model-name.
+
+host          : "localhost"
+port          : 8000
+
+# Request timeout (seconds). Generous default since 70B generations can be slow.
+timeout       : 600
+
+# Whether to 4-bit-quantize (bitsandbytes) the HF fallback model that's used
+# when vLLM generation fails (e.g. guided decoding unsupported/misconfigured,
+# or think-gated grammar which vLLM can't do natively). Set True for 70B runs
+# so the fallback doesn't load a full fp16 model on top of the vLLM server.
+load_in_4bit : False
+
+# Model name for HF fallback. Defaults to generation_params.engine so it
+# always tracks whichever model vLLM is actually serving. Uses a relative
+# interpolation (not absolute) since this file is also composed into a much
+# larger hydra config tree via `/llm@plan_config.llm: vllm`.
+hf_fallback_model : ${.generation_params.engine}
+
+# Inference mode for vLLM
+# You can choose between "hf", "rlm", and "vllm"
+inference_mode          : vllm
+
+# System, User, Assistant and end of turn tags (same as Llama)
+system_tag : "<|start_header_id|>system<|end_header_id|>\n\n"
+user_tag : "<|start_header_id|>user<|end_header_id|>\n\n"
+assistant_tag : "<|start_header_id|>assistant<|end_header_id|>\n\n"
+eot_tag : "<|eot_id|>"
+
+generation_params:
+
+  # Model name as registered in vLLM server (must match --served-model-name)
+  engine          : "Meta-Llama-3.1-8B-Instruct"
+
+  # The prompt to start the generation from.
+  prompt        : ''
+
+  # The maximum number of tokens to generate in the completion.
+  max_tokens    : 250
+
+  # float , optional, defaults to 1.0) — The value used to modulate the next token probabilities.
+  temperature   : 0.0
+
+  # Returns the best `n` out of `best_of` completions made on server side
+  n             : 1
+  best_of       : 1
+
+  # up to 4 sequences that stop the generation
+  stop          : '\n'
+
+  # Return a list of response or not
+  batch_response: False
+
+  # If we want to do sample method of text generation or not
+  do_sample     : False
+
+  # The parameter for repetition penalty. Between 1.0 and infinity. 1.0 means no penalty. Default to 1.0.
+  repetition_penalty : 1.0
+
+  # The number of highest probability vocabulary tokens to keep for top-k-filtering. Between 1 and infinity. Default to 50.
+  top_k         : 50
+
+  # If set to float < 1, only the most probable tokens with probabilities that add up to top_p or higher are kept for generation. Default to 1.0
+  top_p         : 1

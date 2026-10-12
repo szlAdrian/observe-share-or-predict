@@ -16,7 +16,7 @@ try:
     from habitat_llm.llm.rlm_lock import RemotePoolLanguageModel
 except ImportError:
     RemoteLanguageModel = None
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from habitat_llm.llm.base_llm import BaseLLM, Prompt
 
@@ -35,6 +35,8 @@ class VLMHFModel(BaseLLM):
             self.init_local_model()
         elif self.inference_mode == "rlm":
             self.init_remote_model()
+        elif self.inference_mode == "vllm":
+            self.init_vllm_model()
         else:
             print("HFModel does not support this inference mode")
             raise NotImplementedError
@@ -49,6 +51,9 @@ class VLMHFModel(BaseLLM):
             self.model = RemotePoolLanguageModel(serverdir)
 
     def init_local_model(self):
+        raise NotImplementedError
+
+    def init_vllm_model(self):
         raise NotImplementedError
 
     def show_gpu(self, msg):
@@ -96,6 +101,8 @@ class VLMHFModel(BaseLLM):
             self.generate_hf(prompt, stop, max_length, generation_args=generation_args)
         elif self.inference_mode == "rlm":
             self.generate_rlm(prompt, stop, max_length, generation_args=generation_args)
+        elif self.inference_mode == "vllm":
+            self.generate_vllm(prompt, stop, max_length, generation_args=generation_args)
         else:
             raise Exception
         # Clean up the GPU cuda memory,
@@ -214,6 +221,22 @@ class VLMHFModel(BaseLLM):
             generation = generation.rstrip()
             self.response = generation
 
+    def generate_vllm(
+        self,
+        prompt: Prompt,
+        stop: Optional[str] = None,
+        max_length: Optional[int] = None,
+        generation_args: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Generate using vLLM OpenAI-compatible API
+        :param prompt: A string with the input to the language model.
+        :param stop: A string that determines when to stop generation
+        :param max_length: The max number of tokens to generate
+        :param generation_args: Additional generation arguments
+        """
+        raise NotImplementedError
+
     def get_logprobs(self):
         """Get the log probability of the generated text"""
         if self.generation_params.batch_response and self.inference_mode == "hf":
@@ -223,6 +246,8 @@ class VLMHFModel(BaseLLM):
             ]
         elif self.generation_params.batch_response and self.inference_mode == "rlm":
             return [choice["mean_prob"] for choice in self.batch_response]
+        elif self.inference_mode == "vllm":
+            return []
         else:
             return []
 
@@ -246,12 +271,29 @@ class HFModel(VLMHFModel):
         # [F.linear(hidden_states.to("cuda"), lm_head_slices[i].to("cuda"))
         # for i in range(self.pretraining_tp)],
         # forcing hidden_states and lm_head_slices[i] are in the same GPU.
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.generation_params.engine,
-            device_map="auto",
-            low_cpu_mem_usage=True,
-            torch_dtype=torch.float16,
-        )
+        
+        if self.llm_conf.get("load_in_4bit", False):
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,  # or bfloat16
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
+            
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.generation_params.engine,
+                device_map="auto",
+                low_cpu_mem_usage=True,
+                quantization_config=bnb_config,
+            )
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.generation_params.engine,
+                device_map="auto",
+                low_cpu_mem_usage=True,
+                torch_dtype=torch.float16,
+            )
+        
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.generation_params.engine, use_fast=False
         )

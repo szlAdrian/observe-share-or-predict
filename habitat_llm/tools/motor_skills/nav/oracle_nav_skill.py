@@ -24,7 +24,7 @@ from habitat.tasks.utils import get_angle
 
 from habitat_llm.agent.env.actions import find_action_range
 from habitat_llm.tools.motor_skills.skill import SkillPolicy
-from habitat_llm.utils.grammar import NAV_TARGET
+from habitat_llm.utils.grammar import NAV_TARGET, NAV_TARGET_OBJECT_CLASS
 from habitat_llm.utils.sim import (
     check_if_the_object_is_held_by_agent,
     get_receptacle_index,
@@ -649,3 +649,15 @@ class OracleNavSkill(SkillPolicy):
         :return: List of argument types.
         """
         return [NAV_TARGET]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleNavSkill.
+
+        Right now only allowing objects, furniture and rooms as this is all the
+        planner can reason about.
+
+        :return: List of argument types.
+        """
+        return [NAV_TARGET_OBJECT_CLASS]

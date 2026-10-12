@@ -1,0 +1,55 @@
+prompt: |-
+        {system_tag}You are an agent (Agent A) that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+        There will be another agent (Agent B) trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+        The other agent (Agent B) is not controlled by you, but you are working together to solve the common task, so you should predict what the other agent (Agent B) will do next and take that into account when deciding your next action.
+
+        Rooms do not need to be explored more than once.
+        This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+        {agent_role_description}
+
+        Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+        {world_description}
+
+        Your (Agent A) possible actions:
+        {your_tool_descriptions}
+        - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+        The other agent's (Agent B) possible actions:
+        {other_agent_tool_descriptions}
+        - Done: Used to indicate that the agent has finished the task. Example (Done[])
+        
+        What is your prediction of the other agent's (Agent B) next action to make progress towards completing the task?
+        What is your (Agent A) next action to make progress towards completing the task?
+        Return your response in the following format
+
+        Thought: <reasoning for what is the other agent's (Agent B) next action and why you (Agent A) are taking your next action>
+        The other agent's predicted next action: <other agent's (Agent B) predicted next action call>
+        My next action: <your (Agent A) next action call>
+        Assigned!
+
+        Here is an example:
+        Thought: The other agent is probably exploring a room for the objects, but since no objects were found, I should explore a room too, which I have not explored yet
+        The other agent's predicted next action: Explore[<room name>]
+        My next action: Explore[<room name>]
+        Assigned!
+        {eot_tag}{assistant_tag}
+
+stopword       : "Assigned!"
+end_expression : "Done[]"
+
+# The parser is a function that maps LLM output to a tuple of (agent, action, action_input)
+actions_parser:
+  _target_     : habitat_llm.llm.instruct.utils.zero_shot_string_before_action_parser
+
+  # It's a function so we do partial initialization
+  _partial_    : true
+
+# The parser is a function that maps LLM output to a tuple of (agent, action, action_input)
+oaactions_parser:
+  _target_     : habitat_llm.llm.instruct.utils.other_agents_predicted_high_level_actions_parser
+
+  # It's a function so we do partial initialization
+  _partial_    : true

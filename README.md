@@ -1,10 +1,17 @@
-# PARTNR: A Benchmark for Planning and Reasoning in Embodied Multi-Agent Tasks
+# Observe, Share, or Predict? Disentangling Partner Information in Embodied Multi-Agent Collaboration
+This repository is extending facebookresearch's [partnr-planner](https://github.com/facebookresearch/partnr-planner) from commit [ddfff19](https://github.com/facebookresearch/partnr-planner/commit/ddfff19f4b6c098a31edea4d19e7b75db72433c2). We introduce a new Decoupled Partial observability regime, augment agents with Other Agent State (OAS) observation and object Knowledge Exchange (KE) when agents are co-located, and Other Agent Next Action (OANA) prediction. It includes instructions for downloading and running the PARTNR benchmark and our experiments in the Habitat simulator and implements Large Language Model (LLM) based planners.
 
-This is the official repository for the PARTNR benchmark. It includes instructions for downloading and running the PARTNR benchmark in the Habitat simulator and implements Large Language Model (LLM) based planners as baselines.
+<img src="docs/oas_oana_pred_vertical_400.jpg" width="100%"/>
 
-[Project Website](https://aihabitat.org/partnr/) | [Paper](https://arxiv.org/pdf/2411.00081)
+In [PARTNR's](https://github.com/facebookresearch/partnr-planner) decentralized baseline, the robot agent has access to the human agent's perception. For this reason, we introduce the Decoupled Partial Observability in PARTNR, where the robot agent doesn't have this access anymore, and both agents use only their own perception in the simulator.
 
-<img src="docs/cover_fig.png" width="100%"/>
+If the agents are allowed to observe the OAS, then if they are in the same room, they share perception (to avoid inconsistencies between perceived objects and OAS observation), and they also observe the state sequence of the partner agent. If the agents are in different rooms, their OAS observation is 'Acting in another room'. In Full Observability, the agents always observe the OAS.
+
+To allow more interaction between the agents, who are in the same room, they can also change their knowledge about their observed objects (KE). In the Full Observability scenario, the agents use the full world graph, so this setting is not applicable.
+
+At each replanning, if enabled, the agents can also reason about and predict the OANA.
+
+In our [paper](), we test and analyze the role of OAS observation, the object KE, and the OANA prediction in multi-agent collaboration.
 
 ## Overview
 
@@ -31,12 +38,12 @@ Below are the details of various important directories and classes.
     - **prediviz** : Contains visualization and annotation tools for PARTNR tasks.
 
 
-## Information Flow
+## Decoupled architecture with Other Agent’s State (OAS) observation and Other Agent’s Next Action (OANA) prediction.
 
-Below is a figure showing the flow of information through decentralized planners in PARTNR. Please note that there is no explicit communication between the two decentralized planners. The [EnvironmentInterface](./habitat_llm/agent/env/environment_interface.py) reads observations for each agent and sends them to the [Perception Module](./habitat_llm/perception/perception_sim.py). The processed observations are used to update the [World Graph](./habitat_llm/world_model/world_graph.py) and the [Planner](./habitat_llm/planner/planner.py) (based on an LLM or other system) uses the world graph and the task description to select a [Tool](./habitat_llm/tools/tool.py) to interact with the environment.
+Both agents build a world graph using their own environmental object observations and their actions. The graph’s nodes represent the house, rooms, furniture, receptacles, objects, and the agents. The edges represent the type of relation between them. If allowed, the agents also observe the OAS and exchange their knowledge about the objects when they are in the same room. Their high-level LLM planners call a High-Level Action (at replanning) and the corresponding low-level skills (action execution in the simulator), and predict the OANA. The predicted OANA is then compared with the next target action retrieved from the list of All Called High-Level Actions of the other agent.
 
 <p align="center">
-  <img src="docs/planner_v3.png" width="65%"/>
+  <img src="docs/architecture_figure.png" width="65%"/>
 </p>
 
 ## Installation
@@ -47,70 +54,165 @@ For installation, refer to [INSTALLATION.md](INSTALLATION.md)
 
 Baselines for a variety of agent configuration are runnable with the provided configurations. Select any of the baselines from [habitat_llm/conf/baselines](./habitat_llm/conf/baselines/). You may need to specify one or two LLMs based on the baseline. Set the inference mode to `hf` and specify the huggingface model to use for inference. Model weights will be downloaded automatically if they are not found. Below are examples using Llama-3.1-8B running on the `val_mini` data split. Replace `val_mini` with one of `[train_2k, val, train, val_mini]` to run other splits. If you are using local custom path to the weights of the LLM instead of only the huggingface ID for llama 3 models, make sure the string "Llama-3" appears in the path to the weights. The grammar constraining code looks for this string in the path to determine how to load the tokenizer.
 
-### Decentralized Multi Agent React Summary
+### Decentralized Multi-Agent React Summary using Decoupled Partial Observability
 ```bash
-python -m habitat_llm.examples.planner_demo --config-name baselines/decentralized_zero_shot_react_summary.yaml \
+python -m habitat_llm.examples.planner_demo --config-name baselines/decentralized_zero_shot_react_summary_decoupled.yaml \
     habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
     evaluation.agents.agent_0.planner.plan_config.llm.inference_mode=hf \
     evaluation.agents.agent_1.planner.plan_config.llm.inference_mode=hf \
     evaluation.agents.agent_0.planner.plan_config.llm.generation_params.engine=meta-llama/Meta-Llama-3-8B-Instruct \
     evaluation.agents.agent_1.planner.plan_config.llm.generation_params.engine=meta-llama/Meta-Llama-3-8B-Instruct
 ```
-
-### Centralized Multi Agent React Summary
-```bash
-python -m habitat_llm.examples.planner_demo --config-name baselines/centralized_zero_shot_react_summary.yaml \
-    habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
-    evaluation.planner.plan_config.llm.inference_mode=hf \
-    evaluation.planner.plan_config.llm.generation_params.engine=meta-llama/Meta-Llama-3-8B-Instruct
-```
-
-### Single Agent React Summary
-```bash
-python -m habitat_llm.examples.planner_demo --config-name baselines/single_agent_zero_shot_react_summary.yaml \
-    habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
-    evaluation.agents.agent_0.planner.plan_config.llm.inference_mode=hf \
-    evaluation.agents.agent_0.planner.plan_config.llm.generation_params.engine=meta-llama/Meta-Llama-3-8B-Instruct
-```
-
-### Heuristic Planner
-```bash
-python -m habitat_llm.examples.planner_demo --config-name baselines/heuristic_full_obs.yaml \
-    habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz"
-```
-### Custom Instructions
-
-In addition to the PARTNR splits you can run custom instructions as well. Below is an example running a custom instruction using single agent react.
+### Experiment configs
+Use the command above with the appropriate configs below to run experiments with Decoupled Partial or Full Observability, OAS observation, object KE, and OANA prediction.
 
 ```bash
-python -m habitat_llm.examples.planner_demo --config-name baselines/single_agent_zero_shot_react_summary.yaml \
-    instruction="<CUSTOM_INSTRUCTION>" \
-    mode='cli' \
-    evaluation.agents.agent_0.planner.plan_config.llm.inference_mode=hf \
-    evaluation.agents.agent_0.planner.plan_config.llm.generation_params.engine=meta-llama/Meta-Llama-3-8B-Instruct
+baselines/decentralized_zero_shot_react_summary_decoupled.yaml 
+baselines/decentralized_zero_shot_react_summary_decoupled_predict_oana.yaml
+baselines/decentralized_zero_shot_react_summary_decoupled_same_room_knowledge_exchange.yaml 
+baselines/decentralized_zero_shot_react_summary_decoupled_predict_oana_and_same_room_knowledge_exchange.yaml 
+baselines/decentralized_zero_shot_react_summary_decoupled_observe_oas_same_room.yaml 
+baselines/decentralized_zero_shot_react_summary_decoupled_predict_oana_and_observe_oas_same_room.yaml 
+baselines/decentralized_zero_shot_react_summary_decoupled_observe_oas_same_room_knowledge_exchange.yaml 
+baselines/decentralized_zero_shot_react_summary_decoupled_predict_oana_and_observe_oas_same_room_knowledge_exchange.yaml 
 ```
-
-### OpenAI Backend
-To run with openai chat as the LLM backend instead set the `plan_config.llm=openai_chat`. Make sure your API keys have been set appropriately.
-```bash
-python -m habitat_llm.examples.planner_demo --config-name baselines/single_agent_zero_shot_react_summary.yaml \
-    habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val_mini.json.gz" \
-    llm@evaluation.agents.agent_0.planner.plan_config.llm=openai_chat
-```
-Note that constrained generation is not supported for the openai backend.
-
-### Learned Skills
-To run baselines with neural network skills for the robot agent (point nav, pick, and place) append the following argument overrides to the above commands. Please refer to the installation readme to download the skill checkpoints.
 
 ```bash
-    device=cpu \
-    agent@evaluation.agents.agent_0.config=nn_rearrange_agent_motortoolsonly \
-    habitat_conf/task=rearrange_easy_multi_agent_nn \
+baselines/decentralized_zero_shot_react_summary_full_obs.yaml 
+baselines/decentralized_zero_shot_react_summary_predict_oana_full_obs.yaml 
+baselines/decentralized_zero_shot_react_summary_observe_oas_full_obs.yaml 
+baselines/decentralized_zero_shot_react_summary_predict_oana_and_observe_oas_full_obs.yaml 
 ```
+
+## Inference backends
+
+The same experiments can be run with four LLM backends. The backend is selected by the config you pass to `--config-name` and, for vLLM, by a few extra overrides.
+
+| Backend | Baseline configs | LLM config | Requires |
+|---|---|---|---|
+| Local HuggingFace (`hf`) | `baselines/*.yaml` | [llm/llama.yaml](./habitat_llm/conf/llm/llama.yaml) | GPU(s) that fit the model |
+| vLLM server | `baselines/*.yaml` + `llm=vllm` overrides | [llm/vllm.yaml](./habitat_llm/conf/llm/vllm.yaml) | A running vLLM server |
+| OpenRouter API | `baselines/openrouter/*_openrouter.yaml` | [llm/openrouter_chat.yaml](./habitat_llm/conf/llm/openrouter_chat.yaml) | `OPENROUTER_API_KEY` |
+| OpenAI API | `baselines/openai/*_openai.yaml` | [llm/openai_standard_chat.yaml](./habitat_llm/conf/llm/openai_standard_chat.yaml) | `OPENAI_API_KEY` |
+
+### API keys
+
+The API backends read the key from an environment variable (`api_key_env` in the LLM config). Export it in your shell, or put it in `~/.bashrc`:
+
+```bash
+export OPENROUTER_API_KEY=<your-openrouter-key>   # OpenRouter
+export OPENAI_API_KEY=<your-openai-key>           # OpenAI
+```
+
+### OpenRouter
+
+Pick a config from [habitat_llm/conf/baselines/openrouter](./habitat_llm/conf/baselines/openrouter/) and set the model with `generation_params.model` for both agents. The model name is the OpenRouter model ID, e.g. `google/gemini-3.1-flash-lite` (the default in `openrouter_chat.yaml`) or `deepseek/deepseek-v3.2`.
+
+```bash
+export OPENROUTER_API_KEY=<your-openrouter-key>
+
+MODEL_PATH=google/gemini-3.1-flash-lite
+CONFIG_NAME=baselines/openrouter/decentralized_zero_shot_react_summary_decoupled_openrouter.yaml
+OUTPUT_DIR=outputs/habitat_llm/$(date +%Y-%m-%d_%H-%M-%S)-decoupled_gemini_3_1_flash_lite-val.json
+
+python -m habitat_llm.examples.planner_demo \
+  --config-name $CONFIG_NAME \
+  habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val.json.gz" \
+  evaluation.agents.agent_0.planner.plan_config.llm.generation_params.model=$MODEL_PATH \
+  evaluation.agents.agent_1.planner.plan_config.llm.generation_params.model=$MODEL_PATH \
+  hydra.run.dir=$OUTPUT_DIR \
+  num_proc=4
+```
+
+### OpenAI
+
+Same command, with a config from [habitat_llm/conf/baselines/openai](./habitat_llm/conf/baselines/openai/) and an OpenAI model name (default `gpt-4o-mini`):
+
+```bash
+export OPENAI_API_KEY=<your-openai-key>
+
+MODEL_PATH=gpt-4o-mini
+CONFIG_NAME=baselines/openai/decentralized_zero_shot_react_summary_decoupled_openai.yaml
+OUTPUT_DIR=outputs/habitat_llm/$(date +%Y-%m-%d_%H-%M-%S)-decoupled_gpt4o_mini-val.json
+
+python -m habitat_llm.examples.planner_demo \
+  --config-name $CONFIG_NAME \
+  habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val.json.gz" \
+  evaluation.agents.agent_0.planner.plan_config.llm.generation_params.model=$MODEL_PATH \
+  evaluation.agents.agent_1.planner.plan_config.llm.generation_params.model=$MODEL_PATH \
+  hydra.run.dir=$OUTPUT_DIR \
+  num_proc=4
+```
+
+### API experiment configs
+
+The API configs mirror the local ones. The full name is `baselines/<provider>/decentralized_zero_shot_react_summary_<setting>_<provider>.yaml`, where `<provider>` is `openrouter` or `openai`.
+
+| Experiment | `<setting>` |
+|---|---|
+| Decoupled Partial Observability | `decoupled` |
+| + OANA | `decoupled_predict_oana` |
+| + KE | `decoupled_same_room_knowledge_exchange` |
+| + OANA + KE | `decoupled_predict_oana_same_room_knowledge_exchange` |
+| + OAS | `decoupled_observe_oas_same_room` |
+| + OANA + OAS | `decoupled_predict_oana_and_observe_oas_same_room` | 
+| + OAS + KE | `decoupled_observe_oas_same_room_knowledge_exchange` |
+| + OANA + OAS + KE | `decoupled_predict_oana_and_observe_oas_same_room_knowledge_exchange` |
+| Full Observability | `full_obs` |
+| Full Observability + OANA | `predict_oana_full_obs` |
+| Full Observability + OAS | `observe_oas_full_obs` |
+| Full Observability + OANA + OAS | `predict_oana_and_observe_oas_full_obs` |
+
+Notes for the API backends:
+- Both agents use the same model unless you give `agent_0` and `agent_1` different `generation_params.model` values. The OANA prediction is produced in the same LLM call as the agent's own next action, so there is no separate model to configure for it.
+- `num_proc` is the number of episodes run in parallel, and therefore the number of concurrent API requests. Lower it if you hit the provider's rate limits (free OpenRouter models in particular).
+- Grammar-constrained decoding is not available through the chat APIs: `constrained_generation` has no effect here and the output format is enforced only by the prompt.
+- Each replanning step is a paid API call. Try a run on `val_mini.json.gz` before starting a full `val` run.
+
+### vLLM
+
+vLLM serves a local model through an OpenAI-compatible HTTP server, which is faster than `hf` inference and lets several episodes share one loaded model. Start the server first, then run any config from `baselines/*.yaml` with the vLLM overrides:
+
+```bash
+python -m habitat_llm.examples.planner_demo \
+  --config-name baselines/decentralized_zero_shot_react_summary_decoupled.yaml \
+  habitat.dataset.data_path="data/datasets/partnr_episodes/v0_0/val.json.gz" \
+  llm@evaluation.agents.agent_0.planner.plan_config.llm=vllm \
+  llm@evaluation.agents.agent_1.planner.plan_config.llm=vllm \
+  evaluation.agents.agent_0.planner.plan_config.llm.inference_mode=vllm \
+  evaluation.agents.agent_1.planner.plan_config.llm.inference_mode=vllm \
+  evaluation.agents.agent_0.planner.plan_config.llm.generation_params.engine=Meta-Llama-3.1-8B-Instruct \
+  evaluation.agents.agent_1.planner.plan_config.llm.generation_params.engine=Meta-Llama-3.1-8B-Instruct \
+  evaluation.agents.agent_0.planner.plan_config.llm.hf_fallback_model=meta-llama/Meta-Llama-3.1-8B-Instruct \
+  evaluation.agents.agent_1.planner.plan_config.llm.hf_fallback_model=meta-llama/Meta-Llama-3.1-8B-Instruct \
+  num_proc=8
+```
+
+Server setup, the 70B 4-bit variant, running the server in a separate docker container, and troubleshooting are described in [VLLM_INTEGRATION_SUMMARY.md](./VLLM_INTEGRATION_SUMMARY.md).
+
+### Resuming a run
+
+`+resume=true` skips every episode that already has a planner log in `hydra.run.dir` and runs only the missing ones. To continue an interrupted run, set `hydra.run.dir` (`OUTPUT_DIR` above) to the existing run folder instead of a new timestamped one and start the same command again. On a new folder the flag has no effect, so it is safe to always pass it.
+
 
 ## Calculating Results
 You can check the progress of the run and the results so far using
 `python scripts/read_results.py <output_dir>/<dataset_name>`. The default `output_dir` is `outputs/habitat_llm/<timestamp>-<dataset_name>`. This can be overridden using the `paths.results_dir` and `evaluation.output_dir` configuration elements. The output directory also contains the full text traces of the rollouts and other statistics.
+
+## Compute task metrics
+```bash
+python scripts/compute_metrics_summary.py <experiment_folder>
+```
+
+## Compute collaboration metrics
+```bash
+python scripts/compute_collaboration_metrics.py --output-dir <experiment_folder> --dataset val
+```
+
+## Evaluate OANA prediction
+```bash
+python scripts/oana_pred_eval.py <relative_path_to_experiment_folder>
+```
 
 ## Testing episodes
 
@@ -179,17 +281,7 @@ For additional details about adding new agents, tools and custom actions see [he
 
 ## Citation
 
-If you use our codebase or dataset in your research, please cite the [PARTNR](https://arxiv.org/pdf/2411.00081) paper:
-
-```
-@inproceedings{PARTNR,
-  author = {Matthew Chang and Gunjan Chhablani and Alexander Clegg and Mikael Dallaire Cote and Ruta Desai and Michal Hlavac and Vladimir Karashchuk and Jacob Krantz and Roozbeh Mottaghi and Priyam Parashar and Siddharth Patki and Ishita Prasad and Xavier Puig and Akshara Rai and Ram Ramrakhya and Daniel Tran and Joanne Truong and John M. Turner and Eric Undersander and Tsung-Yen Yang},
-  title = {PARTNR: A Benchmark for Planning and Reasoning in Embodied Multi-agent Tasks},
-  booktitle = {International Conference on Learning Representations (ICLR)},
-  note = {alphabetical author order},
-  year = {2025}
-}
-```
+If you use our codebase in your research, please cite the [Observe, Share, or Predict? Disentangling Partner Information in Embodied Multi-Agent Collaboration]() paper
 
 
 ## License

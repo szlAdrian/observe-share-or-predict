@@ -14,6 +14,13 @@ from habitat_llm.llm.hf_model import HFModel  # noqa: F401
 from habitat_llm.llm.llama import Llama  # noqa: F401
 from habitat_llm.llm.multimodal_llama import MultiModalLlama  # noqa: F401
 from habitat_llm.llm.openai_chat import OpenAIChat  # noqa: F401
+from habitat_llm.llm.openrouter_chat import (  # noqa: F401
+    GenericOpenAIChat,
+)
+from habitat_llm.llm.think_gated_logits_processor import (  # noqa: F401
+    ThinkGatedGrammarProcessor,
+)
+from habitat_llm.llm.vllm_model import VLLMModel  # noqa: F401
 
 
 def instantiate_llm(

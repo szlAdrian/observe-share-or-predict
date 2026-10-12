@@ -1,0 +1,15 @@
+# vLLM *server* environment. Install into its OWN venv, not the habitat-llm one:
+# these torch/transformers pins conflict with requirements.txt, and the server
+# is only talked to over HTTP. See INSTALLATION.md, "Set up a vLLM server".
+#
+# Pinned for NVIDIA drivers capped at CUDA 12.4 (e.g. driver 550.x): vllm 0.8.5
+# is the last release line built on torch 2.6.0, the newest torch with cu124
+# wheels. On a newer driver you can install a current vllm instead, but then the
+# server flag is --structured-outputs-config.backend, not --guided-decoding-backend.
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+torchaudio==2.6.0+cu124
+vllm==0.8.5
+transformers==4.51.1  # transformers>=5 breaks vllm 0.8.5 tokenizer loading
+bitsandbytes>=0.45.3  # for --quantization bitsandbytes

@@ -118,3 +118,5 @@ dmypy.json
 
 # ignore rlm logs
 rlm/
+
+run.sh

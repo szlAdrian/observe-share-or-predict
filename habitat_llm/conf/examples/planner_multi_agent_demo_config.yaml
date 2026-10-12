@@ -44,6 +44,12 @@ paths:
   epi_result_file_path: "${paths.results_dir}/episode_result_log.csv"
   run_result_file_path: "${paths.results_dir}/run_result_log.csv"
   end_result_file_path: "${paths.results_dir}/end_result_log.csv"
+  run_action_result_file_path: "${paths.results_dir}/run_action_result_log.json"
+  end_action_result_file_path: "${paths.results_dir}/end_action_result_log.json"
+  run_action_obj_in_graph_result_file_path: "${paths.results_dir}/run_action_obj_in_graph_result_log.json"
+  end_action_obj_in_graph_result_file_path: "${paths.results_dir}/end_action_obj_in_graph_result_log.json"
+  run_action_curr_next_result_file_path: "${paths.results_dir}/run_action_curr_next_result_log.json"
+  end_action_curr_next_result_file_path: "${paths.results_dir}/end_action_curr_next_result_log.json"
 
 
 evaluation:

@@ -1,0 +1,33 @@
+llm:
+  _target_: habitat_llm.llm.GenericOpenAIChat
+  _partial_: True
+
+api_key_env: OPENAI_API_KEY
+
+verbose: True
+
+system_message: 'You are an expert at task planning.'
+
+system_tag: ""
+user_tag: "\n\n"
+assistant_tag: "\n\n"
+eot_tag: ""
+
+keep_message_history: False
+
+generation_params:
+  model: gpt-4o-mini
+
+  max_tokens: 2048
+
+  temperature: 0
+
+  top_p: 1
+
+  stream: False
+
+  stop: "Assigned!"
+
+  frequency_penalty: 0
+  presence_penalty: 0
+  request_timeout: 60

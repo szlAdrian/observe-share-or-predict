@@ -686,3 +686,142 @@ def aggregate_measures(stats_episodes: Dict[str, Dict[str, float]]) -> Dict[str,
             [v[stat_key] for v in stats_episodes.values() if stat_key in v]
         )
     return aggregated_stats
+
+def aggregate_measures_oaa(stats_episodes: Dict[str, Dict[str, float]]) -> Dict[str, float]:
+    """
+    Aggregates measures from a collection of episodes for a run 
+    in case of predicting other agent's actions task
+    Args:
+        stats_episodes: maps episode IDs to a dictionary of measures
+    Returns:
+        dictionary of aggregated measures
+    """
+    aggregated_stats = {}
+    all_ks: Set[str] = set()
+    for ep in stats_episodes.values():
+        all_ks.update(ep.keys())
+    
+    # populate aggregated_stats with the aggregated non accuracy metrics first
+    for stat_key in all_ks:
+        if 'accuracy' not in stat_key:
+            aggregated_stats[stat_key] = np.mean(
+                [v[stat_key] for v in stats_episodes.values() if stat_key in v]
+            )
+    # aggregate accuracy metrics in a statistically correct way  
+    for stat_key in all_ks:
+        agent_id = stat_key[-1] # may not always a number, but only used, when it is        
+        if 'oaa_pred_action_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_pred_count_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+
+        elif 'oaa_pred_principal_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_principal_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_principal_pred_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_principal_pred_count_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+            
+        elif 'oaa_pred_action_principal_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_principal_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_principal_pred_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_principal_pred_count_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+            
+        elif 'oaa_pred_all_args_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_all_args_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_all_args_pred_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_all_args_pred_count_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+
+        elif 'oaa_pred_action_all_args_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_all_args_pred_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_all_args_pred_count_{agent_id}']/aggregated_stats[f'oaa_total_pred_count_{agent_id}'] if aggregated_stats[f'oaa_total_pred_count_{agent_id}'] > 0 else None
+    
+        elif 'oaa_pred_match_success_execution_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_pred_match_success_execution_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_pred_match_success_execution_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_curr_next_{agent_id}'] if aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_curr_next_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_pred_match_success_execution_count_{agent_id}']/aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_{agent_id}'] if aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_{agent_id}'] > 0 else None
+            
+        elif 'oaa_pred_unmatch_success_execution_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_pred_unmatch_success_execution_count_obj_in_graph_{agent_id}']/(aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] - aggregated_stats[f'oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}']) if (aggregated_stats[f'oaa_total_pred_count_obj_in_graph_{agent_id}'] - aggregated_stats[f'oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}']) > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_pred_unmatch_success_execution_count_curr_next_{agent_id}']/(aggregated_stats[f'oa_not_done_pred_count_{agent_id}'] - aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_curr_next_{agent_id}']) if (aggregated_stats[f'oa_not_done_pred_count_{agent_id}'] - aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_curr_next_{agent_id}']) > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_pred_unmatch_success_execution_count_{agent_id}']/(aggregated_stats[f'oa_not_done_pred_count_{agent_id}'] - aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_{agent_id}']) if (aggregated_stats[f'oa_not_done_pred_count_{agent_id}'] - aggregated_stats[f'oaa_correct_action_all_args_pred_not_done_count_{agent_id}']) > 0 else None
+    
+        elif 'oaa_correct_action_principal_if_action_pred_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_principal_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_correct_action_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_correct_action_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_principal_pred_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_correct_action_pred_count_curr_next_{agent_id}'] if aggregated_stats[f'oaa_correct_action_pred_count_curr_next_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_principal_pred_count_{agent_id}']/aggregated_stats[f'oaa_correct_action_pred_count_{agent_id}'] if aggregated_stats[f'oaa_correct_action_pred_count_{agent_id}'] > 0 else None
+        
+        elif 'oaa_correct_action_all_args_if_action_pred_accuracy' in stat_key:
+            if 'obj_in_graph' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_all_args_pred_count_obj_in_graph_{agent_id}']/aggregated_stats[f'oaa_correct_action_pred_count_obj_in_graph_{agent_id}'] if aggregated_stats[f'oaa_correct_action_pred_count_obj_in_graph_{agent_id}'] > 0 else None
+            elif 'curr_next' in stat_key:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_all_args_pred_count_curr_next_{agent_id}']/aggregated_stats[f'oaa_correct_action_pred_count_curr_next_{agent_id}'] if aggregated_stats[f'oaa_correct_action_pred_count_curr_next_{agent_id}'] > 0 else None
+            else:
+                aggregated_stats[stat_key] = aggregated_stats[f'oaa_correct_action_all_args_pred_count_{agent_id}']/aggregated_stats[f'oaa_correct_action_pred_count_{agent_id}'] if aggregated_stats[f'oaa_correct_action_pred_count_{agent_id}'] > 0 else None
+            
+        
+    
+    return aggregated_stats
+#                                                       episodeid  agentid  actionname  metricname
+def aggregate_action_measures(action_stats_episodes: Dict[str, Dict[str, Dict[str, Dict[str, float]]]], is_obj_in_graph: bool = False) -> Dict[str, float]:
+    """
+    Aggregates action measures from a collection of episodes.
+    Args:
+        action_stats_episodes: maps episode IDs to a dictionary of action measures for each action and for each agent
+        is_obj_in_graph: whether the measures are computed only for those cases where the object in the ground truth action is in the graph of the predictor agent (if there any object argument in the action)
+    Returns:
+        dictionary of aggregated action measures per agent and action name
+    """
+    aggregated_stats = {} 
+    #all_ks: Set[str] = set()
+    for ep_id, action_stats_episode in action_stats_episodes.items():
+        #all_ks.update(ep.keys())
+        for agent_id, agent_stats in action_stats_episode.items():
+            if agent_id not in aggregated_stats:
+                aggregated_stats[agent_id] = {}
+            for action_name, action_metrics in agent_stats.items():
+                if action_name not in aggregated_stats[agent_id]:
+                    if is_obj_in_graph:
+                        aggregated_stats[agent_id][action_name] = {'tp': 0, 'fp': 0, 'fn': 0, 'success_count_when_pred': 0, 'failure_count_when_pred': 0} # initialize counts for accuracy metrics
+                    else:
+                        aggregated_stats[agent_id][action_name] = {'tp': 0, 'fp': 0, 'fn': 0, 'success_count_when_pred': 0, 'failure_count_when_pred': 0, 'success_count_all': 0, 'failure_count_all': 0} # initialize counts for accuracy metrics
+                for metric_name, value in action_metrics.items():
+                    #all_ks.add(f"{metric_name}_{agent_id}_{action_name}")
+                    if metric_name not in ['precision', 'recall', 'f1_score']: # these will be computed after aggregating counts
+                        aggregated_stats[agent_id][action_name][metric_name] += value
+    
+    for agent_id, agent_stats in aggregated_stats.items():
+        for action_name, action_metrics in agent_stats.items():
+            tp = action_metrics['tp']
+            fp = action_metrics['fp']
+            fn = action_metrics['fn']
+            # compute accuracy metrics
+            action_metrics['precision'] = tp / (tp + fp) if (tp + fp) > 0 else None
+            action_metrics['recall'] = tp / (tp + fn) if (tp + fn) > 0 else None
+            if action_metrics['precision'] is None or action_metrics['recall'] is None:
+                action_metrics['f1_score'] = None
+            else:
+                action_metrics['f1_score'] = 2 * (action_metrics['precision'] * action_metrics['recall']) / (action_metrics['precision'] + action_metrics['recall']) if (action_metrics['precision'] + action_metrics['recall']) > 0 else None
+
+    return aggregated_stats

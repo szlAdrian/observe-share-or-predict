@@ -14,3 +14,6 @@ from habitat_llm.planner.thoughtless_llm_planner import (  # noqa: F401
     ThoughtlessLLMPlanner,
 )
 from habitat_llm.planner.zero_shot_react_planner import ZeroShotReactPlanner
+from habitat_llm.planner.zero_shot_knowledge_react_planner import ZeroShotKnowledgeReactPlanner
+from habitat_llm.planner.zero_shot_react_predict_oaa_planner import ZeroShotReactPredictOAAPlanner
+from habitat_llm.planner.zero_shot_react_predict_oaa_other_replanned_planner import ZeroShotReactPredictOAAOtherReplannedPlanner

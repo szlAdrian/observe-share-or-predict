@@ -11,7 +11,7 @@ import torch
 
 from habitat_llm.agent.env.actions import find_action_range
 from habitat_llm.tools.motor_skills.skill import SkillPolicy
-from habitat_llm.utils.grammar import OBJECT
+from habitat_llm.utils.grammar import OBJECT, OBJECT_CLASS
 from habitat_llm.utils.sim import (
     check_if_gripper_is_full,
     check_if_the_object_is_held_by_agent,
@@ -189,3 +189,12 @@ class OraclePickSkill(SkillPolicy):
         :return: List of argument types.
         """
         return [OBJECT]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OraclePickSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS]

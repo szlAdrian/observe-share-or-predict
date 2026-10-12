@@ -153,3 +153,12 @@ class MotorSkillTool(Tool):
         :return: List of argument types.
         """
         return self.skill.argument_types
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the MotorSkillTool.
+
+        :return: List of argument types.
+        """
+        return self.skill.argument_obj_class_types
