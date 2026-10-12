@@ -30,7 +30,7 @@ from habitat_llm.sims.metadata_interface import get_metadata_dict_from_config
 from habitat_llm.utils.core import separate_agent_idx
 
 # LOCAL
-from habitat_llm.world_model import DynamicWorldGraph, WorldGraph
+from habitat_llm.world_model import DynamicWorldGraph, Graph, House, WorldGraph
 
 if hasattr(torch, "inference_mode"):
     inference_mode = torch.inference_mode
@@ -120,9 +120,15 @@ class EnvironmentInterface:
 
         # Container to store state history of both agents
         self.agent_state_history = defaultdict(list)
+        
+        # Container to store the observed state history of both agents
+        self.agent_observed_state_history = defaultdict(list)
 
         # Container to store actions history of both agents
         self.agent_action_history = defaultdict(list)
+        
+        # Container to store observed actions history of both agents 
+        self.agent_observed_action_history = defaultdict(list)
 
         # container to store results from composite skills
         self._composite_action_response = {}
@@ -296,13 +302,19 @@ class EnvironmentInterface:
         #     self.__make_video()
 
         self.frames = []
-
-        # Container to store state history of agents
+        
+        # Container to store state history of both agents
         self.agent_state_history = defaultdict(list)
+        
+        # Container to store the observed state history of both agents
+        self.agent_observed_state_history = defaultdict(list)
 
-        # Container to store action history of agents
+        # Container to store actions history of both agents
         self.agent_action_history = defaultdict(list)
-
+        
+        # Container to store observed actions history of both agents 
+        self.agent_observed_action_history = defaultdict(list)  
+        
         # reset episode logging to create dir structure for new episode
         self.reset_logging()
 
@@ -481,14 +493,32 @@ class EnvironmentInterface:
         # Case 2: PARTIAL OBSERVABILITY
         # Update both graphs using both human and robot observations
         else:
-            # Get robots subgraph using both human and robot observations
+            # Get robot subgraph
+            observation_sources = []
+            are_agents_in_same_room = self.full_world_graph.get_room_for_entity(self.full_world_graph.get_spot_robot()) == self.full_world_graph.get_room_for_entity(self.full_world_graph.get_human())
+            if (self.conf.get("robot_asymmetry", False) and 
+                not self.conf.get("observe_oaa_same_room", False) 
+            ) or (self.conf.get("robot_asymmetry", False) and 
+                  self.conf.get("observe_oaa_same_room", False) and 
+                  not are_agents_in_same_room):
+                # robot's world-graph only uses robot's own observations
+                observation_sources = [str(self.robot_agent_uid)]
+            else:
+                # robot's world-graph uses both human's and Spot's observations
+                observation_sources = [
+                    str(self.robot_agent_uid),
+                    str(self.human_agent_uid),
+                ]
             most_recent_robot_subgraph = self.perception.get_recent_subgraph(
-                [str(self.robot_agent_uid), str(self.human_agent_uid)], obs
+                observation_sources, obs
             )
 
-            # Get human subgraph using only human observations
-            observation_sources = []
-            if self.conf.agent_asymmetry:
+            # Get human subgraph
+            if (self.conf.agent_asymmetry and 
+                not self.conf.get("observe_oaa_same_room", False) 
+            ) or (self.conf.agent_asymmetry and 
+                  self.conf.get("observe_oaa_same_room", False) and 
+                  not are_agents_in_same_room):
                 # under asymmetry condition human's world-graph only uses human's own observations
                 observation_sources = [str(self.human_agent_uid)]
             else:
@@ -511,6 +541,22 @@ class EnvironmentInterface:
             self.world_graph[self.human_agent_uid].update(
                 most_recent_human_subgraph, self.partial_obs, self.wm_update_mode
             )
+
+            # Exchange object observations between agents if needed
+            # may pick up objects or receptacles that are observed by 
+            # the other agent in an other room as well, and when the agents 
+            # are in the same room under the appropriate settings they 
+            # exchange their observations about all of the objects and 
+            # receptacles they have observed
+            if self.conf.get("robot_asymmetry", False) and self.conf.get("observe_oaa_same_room", False) and self.conf.get("exchange_obs_same_room", False) and are_agents_in_same_room:
+                union_subgraph = self.get_union_objects_receptacles_subgraph(verbose=False)
+                # Merge union subgraph to both agents' graphs
+                self.world_graph[self.robot_agent_uid].update(
+                    union_subgraph, self.partial_obs, self.wm_update_mode
+                )
+                self.world_graph[self.human_agent_uid].update(
+                    union_subgraph, self.partial_obs, self.wm_update_mode
+                )
 
         return
 
@@ -563,6 +609,56 @@ class EnvironmentInterface:
             self.partial_obs,
             "gt",  # human's WG is always updated in privileged mode
         )
+
+    def get_union_objects_receptacles_subgraph(self, verbose: bool = False):
+        """
+        This method returns a subgraph from the ground truth (full_world_graph) that
+        contains all objects and receptacles which are present in either the robot agent's 
+        or human agent's world graphs (union of observed objects and receptacles).
+
+        Returns:
+            Graph: A subgraph containing all objects and receptacles found in either or both agent world graphs
+        """
+        # Get all objects from robot's world graph
+        robot_objects = self.world_graph[self.robot_agent_uid].get_all_objects()
+        robot_object_names = {obj.name for obj in robot_objects} if robot_objects else set()
+
+        # Get all receptacles from robot's world graph
+        robot_receptacles = self.world_graph[self.robot_agent_uid].get_all_receptacles()
+        robot_receptacle_names = {rec.name for rec in robot_receptacles} if robot_receptacles else set()
+
+        # Get all objects from human's world graph
+        human_objects = self.world_graph[self.human_agent_uid].get_all_objects()
+        human_object_names = {obj.name for obj in human_objects} if human_objects else set()
+
+        # Get all receptacles from human's world graph
+        human_receptacles = self.world_graph[self.human_agent_uid].get_all_receptacles()
+        human_receptacle_names = {rec.name for rec in human_receptacles} if human_receptacles else set()
+
+        # Find union of object and receptacle names
+        union_object_names = robot_object_names.union(human_object_names)
+        union_receptacle_names = robot_receptacle_names.union(human_receptacle_names)
+        union_entity_names = union_object_names.union(union_receptacle_names)
+
+        if verbose:
+            print(f"Robot objects: {robot_object_names}")
+            print(f"Robot receptacles: {robot_receptacle_names}")
+            print(f"Human objects: {human_object_names}")
+            print(f"Human receptacles: {human_receptacle_names}")
+            print(f"Union entities: {union_entity_names}")
+
+        # Create a subgraph from full_world_graph containing only union entities
+        if union_entity_names:
+            union_subgraph = self.full_world_graph.get_subgraph(
+                list(union_entity_names), verbose=verbose
+            )
+        else:
+            # If no entities, return an empty subgraph
+            union_subgraph = Graph()
+            house = House("house", {"type": "root"}, "house_0")
+            union_subgraph.add_node(house)
+
+        return union_subgraph
 
     def get_frame_description(self, obs):
         """

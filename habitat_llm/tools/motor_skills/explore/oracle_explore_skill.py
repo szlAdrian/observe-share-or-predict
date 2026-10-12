@@ -233,3 +233,7 @@ class OracleExploreSkill(SkillPolicy):
         :return: List of argument types.
         """
         return [ROOM]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        return self.argument_types

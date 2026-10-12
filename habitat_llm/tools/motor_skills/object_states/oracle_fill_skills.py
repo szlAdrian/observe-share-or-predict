@@ -11,7 +11,7 @@ from habitat_llm.tools.motor_skills.object_states.oracle_object_state_skill impo
     ObjectStateSkillResult,
     OracleObjectStateInPlaceSkill,
 )
-from habitat_llm.utils.grammar import OBJECT
+from habitat_llm.utils.grammar import OBJECT, OBJECT_CLASS
 
 if TYPE_CHECKING:
     from habitat_llm.sims.collaboration_sim import CollaborationSim
@@ -110,6 +110,15 @@ class OracleFillInPlaceSkill(OracleObjectStateInPlaceSkill):
         :return: List of argument types.
         """
         return [OBJECT]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS]
 
 
 class OracleFillSkill(CompoundSkill):
@@ -142,3 +151,12 @@ class OracleFillSkill(CompoundSkill):
         :return: List of argument types.
         """
         return [OBJECT]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS]

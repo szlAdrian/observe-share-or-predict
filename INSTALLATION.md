@@ -70,6 +70,55 @@ ln -s versioned_data/partnr_episodes/checkpoints data/models
 pip install pybullet==3.0.4
 ```
 
+### Quantized LLMs (bitsandbytes)
+`bitsandbytes` is installed by `requirements.txt` (used by `llm.load_in_4bit`
+in `hf` mode). If you're serving a `--quantization bitsandbytes` model through
+the separate vLLM venv below, it needs to be installed **there too** (it runs
+inside the vLLM server process) — `requirements_vllm.txt` covers that.
+
+### (Optional) Set up a vLLM server for fast/memory-efficient inference
+`inference_mode: vllm` (`habitat_llm/conf/llm/vllm.yaml`) talks to a vLLM
+OpenAI-compatible server over HTTP instead of loading the model in-process.
+Since it's a separate process, **install vLLM in its own conda/venv env**
+rather than the `habitat-llm` env — it doesn't need to share habitat-llm's
+torch 2.4.1 pin, and mixing them risks dependency conflicts.
+
+```bash
+python3.11 -m venv ~/.venvs/vllm
+source ~/.venvs/vllm/bin/activate
+pip install "vllm>=0.6.5"  # xgrammar guided-decoding backend needs >=0.6.5
+pip install "bitsandbytes>=0.45.3"  # only needed if serving with --quantization bitsandbytes
+```
+
+If your NVIDIA driver is capped below what a plain `pip install vllm` requires
+(e.g. `RuntimeError: The NVIDIA driver on your system is too old`), check the
+max CUDA version your driver supports with `nvidia-smi` (top-right of the
+header) and, if you can't upgrade the driver (e.g. no root on a shared
+cluster), pin vLLM and torch to a release line built for that CUDA version
+instead. For a driver capped at CUDA 12.4, `requirements_vllm.txt` pins a
+working combination (torch 2.6.0+cu124, vllm 0.8.5, transformers 4.51.1,
+bitsandbytes):
+```bash
+pip install -r requirements_vllm.txt
+# Only if a newer vllm was installed in this env before: remove its leftover
+# flashinfer/tvm_ffi build (built against the newer torch's ABI, and vllm==0.8.5
+# already disables flashinfer's sampler anyway):
+pip uninstall -y flashinfer flashinfer-python tvm-ffi tvm_ffi torch-c-dlpack-ext torch_c_dlpack_ext
+```
+(vLLM's own CUDA-version-specific wheels — see the "Install vLLM with pip for
+other CUDA versions" section of the
+[vLLM docs](https://docs.vllm.ai/en/latest/getting_started/installation/gpu.html) —
+are another option if a matching prebuilt combo exists for your CUDA version.)
+
+Start the server (see `run.sh` for the exact commands, 8B full-precision and
+70B bitsandbytes 4-bit variants), then point `habitat-llm` at it with
+`llm.host`/`llm.port` (defaults to `localhost:8000`) and
+`llm.generation_params.engine` matching `--served-model-name`. Grammar-
+constrained baselines (`constrained_generation: True`) require the server to
+be started with `--guided-decoding-backend xgrammar`. On vllm>=0.12.0 this
+flag was renamed to `--structured-outputs-config.backend xgrammar` — use
+whichever matches your installed vLLM version.
+
 ### Install pre-commit
 ```bash
 pip install pre-commit && pre-commit install

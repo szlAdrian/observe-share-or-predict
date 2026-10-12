@@ -11,7 +11,7 @@ from habitat_llm.tools.motor_skills.object_states.oracle_object_state_skill impo
     ObjectStateSkillResult,
     OracleObjectStateInPlaceSkill,
 )
-from habitat_llm.utils.grammar import OBJECT_OR_FURNITURE
+from habitat_llm.utils.grammar import OBJECT_CLASS_OR_FURNITURE, OBJECT_OR_FURNITURE
 
 if TYPE_CHECKING:
     from habitat_llm.sims.collaboration_sim import CollaborationSim
@@ -116,6 +116,15 @@ class OraclePowerInPlaceSkill(OracleObjectStateInPlaceSkill):
         :return: List of argument types.
         """
         return [OBJECT_OR_FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS_OR_FURNITURE]
 
 
 class OraclePowerOnInPlaceSkill(OraclePowerInPlaceSkill):
@@ -178,6 +187,15 @@ class OraclePowerOnSkill(CompoundSkill):
         :return: List of argument types.
         """
         return [OBJECT_OR_FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS_OR_FURNITURE]
 
 
 class OraclePowerOffSkill(CompoundSkill):
@@ -210,3 +228,12 @@ class OraclePowerOffSkill(CompoundSkill):
         :return: List of argument types.
         """
         return [OBJECT_OR_FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS_OR_FURNITURE]

@@ -27,6 +27,7 @@ from habitat_llm.utils.grammar import (
     SPATIAL_CONSTRAINT,
     SPATIAL_RELATION,
 )
+from habitat_llm.world_model.entity import Object, SpotRobot, Human
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -71,6 +72,8 @@ class LLMPlanner(Planner):
         # any other material in prompt
         self.trace: str = ""
         self.rag: Optional["RAG"] = None
+        
+        self.counter = 0
 
         self.reset()
 
@@ -156,6 +159,13 @@ class LLMPlanner(Planner):
         spatial_constraint_rule = f'{SPATIAL_CONSTRAINT} ::= "next_to"'
         spatial_relation_rule = f'{SPATIAL_RELATION} ::= "on" | "within"'
         free_text_rule = f"{FREE_TEXT} ::= [ \"'.:,!a-zA-Z_0-9]*"
+        # Leading "-" (right after "[") is the unambiguous way to include a
+        # literal hyphen in a character class -- a trailing "-" right before
+        # the closing "]" (especially after an escaped "\]") is ambiguous
+        # with a range operator and xgrammar's stricter EBNF parser rejects
+        # it ("Invalid grammar specification"), even though transformers_cfg
+        # (used by the HF fallback) accepts it fine.
+        # free_text_rule = f"{FREE_TEXT} ::= [- \\t\\n\"\':,!a-zA-Z_0-9<>/=;()\\[\\]]*"
         white_space_rule = "WS ::= [ ]*"
         rules.append(furniture_rule)
         rules.append(room_rule)
@@ -553,7 +563,23 @@ class LLMPlanner(Planner):
         Replan a high level action using the LLM/VLM
         """
         # Generate response
+        '''
+        print('------------------------------------------------------------------')
+        print('world_graph:', world_graph)
+        print('------------------------------------------------------------------')
+        print('self.curr_prompt:', self.curr_prompt)
+        print('------------------------------------------------------------------')
+        print('self.stopword:', self.stopword)
+        print('------------------------------------------------------------------')
+        '''
+        '''
+        print('------------------------------------------------------------------')
+        print('self.curr_prompt:', self.curr_prompt)
+        print('------------------------------------------------------------------')
+        '''
         if self.planner_config.get("constrained_generation", False):
+            #print('Using constrained generation')
+            #print('self.llm',self.llm)
             llm_response = self.llm.generate(
                 self.curr_prompt,
                 self.stopword,
@@ -564,13 +590,23 @@ class LLMPlanner(Planner):
                 },
             )
         else:
+            #print('Using constrained generation')
             llm_response = self.llm.generate(self.curr_prompt, self.stopword)
-
+        '''
+        print('------------------------------------------------------------------')
+        print('llm_response:', llm_response)
+        print('------------------------------------------------------------------')
+        '''
         # Format the response
         # This removes extra text followed by end expression when needed.
         llm_response = self.format_response(llm_response, self.end_expression)
 
         info = {"llm_response": llm_response}
+        '''
+        print('info:', info)
+        print('------------------------------------------------------------------')
+        #asd
+        '''
         return info
 
     def get_next_action(
@@ -605,6 +641,7 @@ class LLMPlanner(Planner):
                 "replan_required": {
                     agent.uid: self.replan_required for agent in self.agents
                 },
+                'agent_states': {agent.uid: 'Standing' for agent in self.agents},
                 "is_done": {agent.uid: self.is_done for agent in self.agents},
             }
             return {}, planner_info, self.is_done
@@ -627,18 +664,61 @@ class LLMPlanner(Planner):
 
         print_str = ""
         self.is_done = False
-
+        '''
+        if self.counter % 10 == 0:
+            self.prev_robot_graph = world_graph[0].graph
+            self.prev_human_graph = world_graph[1].graph
+            for attr_name, attr_value in world_graph.items():
+                    print(f"\n--------------[DEBUG] World Graph of Agent {attr_name}------------\n")
+                    #self.trace += f"\n--------------[DEBUG] World Graph of Agent {attr_name}------------\n"
+                    for k,v in attr_value.graph.items():
+                        if isinstance(k,Object) or isinstance(k,SpotRobot) or isinstance(k,Human):
+                            print(k, ": ", v)
+                            print()
+                            #self.trace += f"{k} : {v}\n"
+                    print(f"-------------------------------------")
+                    #self.trace += f"-------------------------------------\n"
+        
+        if self.counter > 0 and (self.prev_robot_graph != world_graph[0].graph or self.prev_human_graph != world_graph[1].graph):
+            self.prev_robot_graph = world_graph[0].graph
+            self.prev_human_graph = world_graph[1].graph
+            for attr_name, attr_value in world_graph.items():
+                    print(f"\n--------------[DEBUG] World Graph of Agent {attr_name}------------\n")
+                    #self.trace += f"\n--------------[DEBUG] World Graph of Agent {attr_name}------------\n"
+                    for k,v in attr_value.graph.items():
+                        if isinstance(k,Object) or isinstance(k,SpotRobot) or isinstance(k,Human):
+                            print(k, ": ", v)
+                            print()
+                            #self.trace += f"{k} : {v}\n"
+                    print(f"-------------------------------------")
+                    #self.trace += f"-------------------------------------\n"
+        self.counter += 1
+        '''
         if self.replan_required:
+            for attr_name, attr_value in world_graph.items():
+                #print(f"\n--------------[DEBUG] World Graph of Agent {attr_name}------------\n")
+                self.trace += f"\n--------------[DEBUG] World Graph of Agent {attr_name}------------\n"
+                for k,v in attr_value.graph.items():
+                    if isinstance(k,Object) or isinstance(k,SpotRobot) or isinstance(k,Human):
+                        #print(k, ": ", v)
+                        #print()
+                        self.trace += f"{k} : {v}\n"
+                #print(f"-------------------------------------")
+                self.trace += f"-------------------------------------\n"
+
             planner_info["replanned"] = {agent.uid: True for agent in self.agents}
             if verbose:
                 # calculate the total time of response generation
                 start_time = time.time()
 
             response_info = self.replan(instruction, observations, world_graph)
+            #print(f'response_info: {response_info}')
             llm_response = response_info["llm_response"]
+            #print(f'llm_response: {llm_response}')
             # parse thought from the response
             thought = self.parse_thought(llm_response)
-
+            #print(f'thought: {thought}')
+            
             if verbose:
                 total_time = time.time() - start_time
                 print(
@@ -646,7 +726,7 @@ class LLMPlanner(Planner):
                 )
 
             # Update prompt with the first response
-            print_str += f"""{llm_response}\n{self.stopword}\n"""
+            print_str += f"""----------agent {(self.agents[0]).uid}----------\n{llm_response}\n{self.stopword}\n----------agent {(self.agents[0]).uid}----------\n"""
             prompt_addition = (
                 f"""{llm_response}\n{self.stopword}{self.planner_config.llm.eot_tag}"""
             )
@@ -684,6 +764,7 @@ class LLMPlanner(Planner):
                     "high_level_actions": {
                         agent.uid: ("Done", None, None) for agent in self.agents
                     },
+                    'agent_states': {agent.uid: 'Standing' for agent in self.agents},
                 }
                 return {}, planner_info, self.is_done
 

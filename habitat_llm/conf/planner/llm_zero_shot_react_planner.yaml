@@ -17,3 +17,11 @@ plan_config:
     rag_dataset_dir: "" # The path to the rag_data_source_name folder
     rag_data_source_name: "" # rag_data_source_name folder itself
     example_type: "react" # The prompting format
+
+    # "Think-then-constrain" generation for reasoning models (e.g. DeepSeek-R1-Distill):
+    # generation is unconstrained until think_close_tag is emitted, then the action
+    # call is CFG-constrained. See ZeroShotReactPlanner.replan.
+    think_then_constrain: False
+    think_open_tag: "<think>\n"
+    think_close_tag: "</think>\n"
+    think_gate_max_tokens: null # safety valve; null = wait indefinitely for think_close_tag

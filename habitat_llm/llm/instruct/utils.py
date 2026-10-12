@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import typing
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union, Any
 
 import regex as re
 
@@ -390,9 +390,25 @@ def remove_non_alpha_left(input_string):
     return ""
 
 
+def zero_shot_string_before_action_parser(agents, input_string, params=None):
+    # get the skill call before the Assigned!
+    # print(f'----------------zero_shot_string_before_action_parser   input_string-------------------')
+    # print(input_string)
+    # print(f'----------------zero_shot_string_before_action_parser   input_string-------------------')
+    action_line = input_string.strip().split("\n")[-1]
+    action_line = action_line.split(":",1)[1].strip()
+    # this parser is for single agent only
+    assert len(agents) == 1
+    agent_id = agents[0].uid
+    # reuse the existing parser
+    return actions_parser(agents, f"Agent_{agent_id}_Action: {action_line}", params)
+
 def zero_shot_action_parser(agents, input_string, params=None):
     # get the skill call before the Assigned!
     action_line = input_string.strip().split("\n")[-1]
+    # print('----------------Action line:----------------')
+    # print(f"${action_line}$")
+    # print('-----------------------------------------')
     # this parser is for single agent only
     assert len(agents) == 1
     agent_id = agents[0].uid
@@ -515,6 +531,38 @@ def actions_parser(
             actions_dict[agent_id] = (action_name, action_input, None)
 
     return actions_dict
+
+def other_agents_predicted_high_level_actions_parser(llm_response, agent_id) -> Dict[int, Tuple[str, Union[Dict[str, Any], None]]]:
+    """
+    Actions parser used by planners to convert LLM generation into a structured representation.
+    :param llm_response: The LLM response.
+    :return: A dictionary mapping agent UID to the predicted high level action and its arguments.
+    """
+    other_agents_predicted_high_level_actions = {}
+    # Split input string
+    lines = llm_response.strip().split("\n")
+    action_info = lines[-2].split(":", 1)[1].strip()
+    # print('-------------------[DEBUG] Parsing other agents predicted high level action------------------')
+    # print(f'lines: {lines}')
+    # print('--------------------[DEBUG] Parsing other agents predicted high level action------------------')
+    # Make syntax exception for Wait command
+    if "Wait" in action_info:
+        action_info = "Wait[]"
+
+    # Add error message to indicate if the line does not have complete square brackets
+    if not has_valid_square_brackets(action_info):
+        other_agents_predicted_high_level_actions[agent_id] = (
+            None,
+            None,
+            'SyntaxError in Action directive. Opening "[" or closing "]" square bracket is missing!',
+            )
+        return other_agents_predicted_high_level_actions
+
+    # Split the action info into action name and action arguments (inputs)
+    action_name, action_input = action_info.split("[")
+    action_input = action_input.rstrip("]")
+    other_agents_predicted_high_level_actions[agent_id] = (action_name, action_input, None)
+    return other_agents_predicted_high_level_actions
 
 
 def finetuned_actions_parser(

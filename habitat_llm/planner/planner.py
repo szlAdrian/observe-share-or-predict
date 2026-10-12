@@ -250,10 +250,27 @@ class Planner:
                 # NOTE: this is a separate function since two agents may refer to the
                 # same entity using different descriptions. This function call handles
                 # that ambiguity
-                if (
-                    self.env_interface.conf.agent_asymmetry
+                #print(f'\n-----------{self.env_interface.conf.get("update_other_agent_world_graph_by_agent_action", True)}-----------\n')
+                are_agents_in_same_room = self.env_interface.full_world_graph.get_room_for_entity(self.env_interface.full_world_graph.get_spot_robot()) == self.env_interface.full_world_graph.get_room_for_entity(self.env_interface.full_world_graph.get_human())
+                if (not self.env_interface.conf.agent_asymmetry
+                ) or (self.env_interface.conf.agent_asymmetry
                     and int_agent_uid == self.env_interface.human_agent_uid
-                ) or (not self.env_interface.conf.agent_asymmetry):
+                    and self.env_interface.conf.get(
+                        "update_other_agent_world_graph_by_agent_action", True
+                    )
+                    and not self.env_interface.conf.get(
+                        "robot_asymmetry", False
+                    )
+                ) or (self.env_interface.conf.get(
+                        "robot_asymmetry", False
+                    ) and self.env_interface.conf.get(
+                        "observe_oaa_same_room", False
+                    ) and are_agents_in_same_room):
+                    # print('-----------------------')
+                    # print(
+                    #     f"Updating agent {int_other_agent_uid}'s world graph with agent {int_agent_uid}'s action {action_and_args} and response {action_results}"
+                    # )
+                    # print('-----------------------')
                     # only update robot's WG with other agent's actions
                     # OR
                     # add action based updates irrespective of agent types

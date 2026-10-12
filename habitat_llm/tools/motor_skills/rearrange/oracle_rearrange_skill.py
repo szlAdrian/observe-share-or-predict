@@ -17,6 +17,8 @@ from habitat_llm.tools.motor_skills.skill import SkillPolicy
 from habitat_llm.utils.grammar import (
     FURNITURE,
     OBJECT,
+    OBJECT_CLASS,
+    OBJECT_CLASS_OR_FURNITURE,
     OBJECT_OR_FURNITURE,
     SPATIAL_CONSTRAINT,
     SPATIAL_RELATION,
@@ -112,6 +114,17 @@ class OracleRearrangeSkill(SkillPolicy):
         none = '("none" | "None")'
         optional_constraint = f'(({SPATIAL_CONSTRAINT} "," WS {OBJECT_OR_FURNITURE} )| ({none} WS "," WS {none}))'
         return [OBJECT, SPATIAL_RELATION, FURNITURE, optional_constraint]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleRearrangeSkill.
+
+        :return: List of argument types.
+        """
+        none = '("none" | "None")'
+        optional_constraint = f'(({SPATIAL_CONSTRAINT} "," WS {OBJECT_CLASS_OR_FURNITURE} )| ({none} WS "," WS {none}))'
+        return [OBJECT_CLASS, SPATIAL_RELATION, FURNITURE, optional_constraint]
 
     def set_target(self, arg_string, env):
         # We follow the format:

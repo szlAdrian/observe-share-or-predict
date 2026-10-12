@@ -11,6 +11,7 @@ from transformers_cfg.generation.logits_process import GrammarConstrainedLogitsP
 from transformers_cfg.grammar_utils import IncrementalGrammarConstraint
 
 from habitat_llm.llm.hf_model import HFModel
+from habitat_llm.llm.think_gated_logits_processor import ThinkGatedGrammarProcessor
 
 
 class Llama(HFModel):
@@ -65,6 +66,23 @@ class Llama(HFModel):
                 generation_args["grammar_definition"], "root", self.tokenizer
             )
             grammar_processor = GrammarConstrainedLogitsProcessor(grammar)
+
+            # If requested, keep generation unconstrained until the model
+            # emits `think_gate_close_tag` (e.g. "</think>"), and only then
+            # start applying the grammar constraint. This lets reasoning
+            # models freely emit a <think>...</think> block before the
+            # CFG-constrained action call.
+            think_close_tag = generation_args.get("think_gate_close_tag")
+            if think_close_tag:
+                prompt_len = model_inputs.input_ids.shape[1]
+                grammar_processor = ThinkGatedGrammarProcessor(
+                    grammar_processor,
+                    self.tokenizer,
+                    think_close_tag,
+                    prompt_len,
+                    max_think_tokens=generation_args.get("think_gate_max_tokens"),
+                )
+
             extra_generation_args["logits_processor"] = [grammar_processor]
 
         # Generate the response

@@ -208,7 +208,11 @@ class WorldGraph(Graph):
                     # in the house unbeknownst to the human agent
                     objs_info += obj.name + ": " + "unknown" + "\n"
                 else:
-                    raise ValueError(f"Object {obj.name} has no parent")
+                    # To avoid the exception as in the original code,
+                    # we just assign unknown. The other function in instruct/utils.py
+                    # doesn't have this exception either.
+                    objs_info += obj.name + ": " + "unknown" + "\n"
+                    # raise ValueError(f"Object {obj.name} has no parent")
         return f"Furniture:\n{house_info}\nObjects:\n{objs_info}"
 
     def is_object_with_human(self, obj):

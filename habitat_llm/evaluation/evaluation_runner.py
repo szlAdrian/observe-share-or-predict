@@ -358,6 +358,20 @@ class EvaluationRunner:
 
         with open(file_path_json, "w+") as file:
             file.write(json.dumps(planner_log))
+            
+        # Log the last step info separately for easier access to metrics 
+        # and other info, since the planner log could be large to open
+        file_path_json = os.path.join(
+            self.output_dir,
+            "planner-last-step-log",
+            f"planner-last-step-log-{self.episode_filename}.json",
+        )
+            
+        # Make directory if it doesn't exists already
+        os.makedirs(os.path.dirname(file_path_json), exist_ok=True)
+            
+        with open(file_path_json, "w+") as file:
+            file.write(json.dumps(planner_log["steps"][-1]))      
 
         print("Successfully logged planner data!")
         if self.evaluation_runner_config.log_detailed_traces:
@@ -480,6 +494,8 @@ class EvaluationRunner:
         if "agent_states" in planner_info:
             for agent_uid in planner_info["agent_states"]:
                 agent_state_at_t = planner_info["agent_states"][agent_uid]
+                    
+                # update agent_state_history in env_interface
                 if len(self.env_interface.agent_state_history[agent_uid]) > 0:
                     agent_state_at_t_minus_1 = self.env_interface.agent_state_history[
                         agent_uid
@@ -496,6 +512,38 @@ class EvaluationRunner:
                     self.env_interface.agent_state_history[agent_uid].append(
                         StateHistoryElement(
                             agent_state_at_t,
+                            planner_info["sim_step_count"],
+                            agent_uid=agent_uid,
+                        )
+                    )
+                    
+                # In the case when the agents have the ability to observe each 
+                # other's act/state, then if the agents are in the same room, 
+                # they can observe each other's act/state, but if they are in 
+                # different rooms at this point, then they only know that the other 
+                # is doing something in another room
+                if self.env_interface.full_world_graph.get_room_for_entity(self.env_interface.full_world_graph.get_spot_robot()) == self.env_interface.full_world_graph.get_room_for_entity(self.env_interface.full_world_graph.get_human()):
+                    agent_observed_state_at_t = planner_info["agent_states"][agent_uid]
+                else:
+                    agent_observed_state_at_t = "Acting in an other room"
+                    
+                # update agent_observed_state_history in env_interface
+                if len(self.env_interface.agent_observed_state_history[agent_uid]) > 0:
+                    agent_observed_state_at_t_minus_1 = self.env_interface.agent_observed_state_history[
+                        agent_uid
+                    ][-1]
+                    if agent_observed_state_at_t != agent_observed_state_at_t_minus_1.state:
+                        self.env_interface.agent_observed_state_history[agent_uid].append(
+                            StateHistoryElement(
+                                agent_observed_state_at_t,
+                                planner_info["sim_step_count"],
+                                agent_uid=agent_uid,
+                            )
+                        )
+                else:
+                    self.env_interface.agent_observed_state_history[agent_uid].append(
+                        StateHistoryElement(
+                            agent_observed_state_at_t,
                             planner_info["sim_step_count"],
                             agent_uid=agent_uid,
                         )
@@ -528,6 +576,31 @@ class EvaluationRunner:
 
                 self.env_interface.agent_action_history[agent_id].append(
                     action_history_object
+                )
+                
+                # In the case when the agents have the ability to observe each 
+                # other's act/state, then if the agents are in the same room, 
+                # they can observe each other's act/state, but if they are in 
+                # different rooms at this point, then they only know that the other 
+                # is doing something in another room
+                if self.env_interface.full_world_graph.get_room_for_entity(self.env_interface.full_world_graph.get_spot_robot()) == self.env_interface.full_world_graph.get_room_for_entity(self.env_interface.full_world_graph.get_human()):
+                    agent_observed_action = planner_info["high_level_actions"][agent_id]
+                else:
+                    agent_observed_action = ('ActInOtherRoom',None,None)
+                
+                observed_action_history_object = ActionHistoryElement(
+                    action=agent_observed_action,
+                    timestamp=planner_info["sim_step_count"],
+                    agent_uid=agent_id,
+                    world_graph=copy.deepcopy(self.env_interface.world_graph),
+                    info={
+                        "planner_info": planner_info,
+                        "log_time": time.time(),
+                    },
+                )
+
+                self.env_interface.agent_observed_action_history[agent_id].append(
+                    observed_action_history_object
                 )
 
         # add responses the last logged action, this means the planner will replan at the next step
@@ -698,6 +771,69 @@ class EvaluationRunner:
                         )
                     print(f"WG written to:\n{filepath}")
 
+        if "per_action_metrics" in planner_infos[-1] and isinstance(
+            planner_infos[-1]["per_action_metrics"], dict):
+            for agent_id, agent_metrics in planner_infos[-1]["per_action_metrics"].items():
+                for action_name, action_metrics in agent_metrics.items():
+                    if 'tp' in action_metrics and 'fp' in action_metrics and 'fn' in action_metrics:
+                        tp = action_metrics['tp']
+                        fp = action_metrics['fp']
+                        fn = action_metrics['fn']
+                        precision = tp / (tp + fp) if (tp + fp) > 0 else None
+                        recall = tp / (tp + fn) if (tp + fn) > 0 else None
+                        if precision is None or recall is None:
+                            f1_score = None
+                        else:
+                            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else None
+                        planner_infos[-1]["per_action_metrics"][agent_id][action_name]['precision'] = precision
+                        planner_infos[-1]["per_action_metrics"][agent_id][action_name]['recall'] = recall
+                        planner_infos[-1]["per_action_metrics"][agent_id][action_name]['f1_score'] = f1_score
+                        planner_info["per_action_metrics"][agent_id][action_name]['precision'] = precision
+                        planner_info["per_action_metrics"][agent_id][action_name]['recall'] = recall
+                        planner_info["per_action_metrics"][agent_id][action_name]['f1_score'] = f1_score
+        
+        if "per_action_metrics_obj_in_graph" in planner_infos[-1] and isinstance(
+            planner_infos[-1]["per_action_metrics_obj_in_graph"], dict):
+            for agent_id, agent_metrics in planner_infos[-1]["per_action_metrics_obj_in_graph"].items():
+                for action_name, action_metrics in agent_metrics.items():
+                    if 'tp' in action_metrics and 'fp' in action_metrics and 'fn' in action_metrics:
+                        tp = action_metrics['tp']
+                        fp = action_metrics['fp']
+                        fn = action_metrics['fn']
+                        precision = tp / (tp + fp) if (tp + fp) > 0 else None
+                        recall = tp / (tp + fn) if (tp + fn) > 0 else None
+                        if precision is None or recall is None:
+                            f1_score = None
+                        else:
+                            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else None
+                        planner_infos[-1]["per_action_metrics_obj_in_graph"][agent_id][action_name]['precision'] = precision
+                        planner_infos[-1]["per_action_metrics_obj_in_graph"][agent_id][action_name]['recall'] = recall
+                        planner_infos[-1]["per_action_metrics_obj_in_graph"][agent_id][action_name]['f1_score'] = f1_score
+                        planner_info["per_action_metrics_obj_in_graph"][agent_id][action_name]['precision'] = precision
+                        planner_info["per_action_metrics_obj_in_graph"][agent_id][action_name]['recall'] = recall
+                        planner_info["per_action_metrics_obj_in_graph"][agent_id][action_name]['f1_score'] = f1_score                
+        
+        if "per_action_metrics_curr_next" in planner_infos[-1] and isinstance(
+            planner_infos[-1]["per_action_metrics_curr_next"], dict):
+            for agent_id, agent_metrics in planner_infos[-1]["per_action_metrics_curr_next"].items():
+                for action_name, action_metrics in agent_metrics.items():
+                    if 'tp' in action_metrics and 'fp' in action_metrics and 'fn' in action_metrics:
+                        tp = action_metrics['tp']
+                        fp = action_metrics['fp']
+                        fn = action_metrics['fn']
+                        precision = tp / (tp + fp) if (tp + fp) > 0 else None
+                        recall = tp / (tp + fn) if (tp + fn) > 0 else None
+                        if precision is None or recall is None:
+                            f1_score = None
+                        else:
+                            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else None
+                        planner_infos[-1]["per_action_metrics_curr_next"][agent_id][action_name]['precision'] = precision
+                        planner_infos[-1]["per_action_metrics_curr_next"][agent_id][action_name]['recall'] = recall
+                        planner_infos[-1]["per_action_metrics_curr_next"][agent_id][action_name]['f1_score'] = f1_score
+                        planner_info["per_action_metrics_curr_next"][agent_id][action_name]['precision'] = precision
+                        planner_info["per_action_metrics_curr_next"][agent_id][action_name]['recall'] = recall
+                        planner_info["per_action_metrics_curr_next"][agent_id][action_name]['f1_score'] = f1_score
+        
         # Print
         if (
             "print" in planner_info

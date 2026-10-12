@@ -93,7 +93,8 @@ class Agent:
         out = ""
         out += f"Agent ID: {self.uid}\n"
         for tool_name in sorted(self.tools.keys()):
-            out += f"- {tool_name}: {self.tools[tool_name].description}\n"
+            if not (self.agent_conf.get("no_faat_in_descriptions", False) and tool_name == "FindAgentActionTool"):
+                out += f"- {tool_name}: {self.tools[tool_name].description}\n"
 
         out += "\n"
 
@@ -112,7 +113,7 @@ class Agent:
         return "\n".join(
             [
                 f"- {tool_name}: {self.tools[tool_name].description}"
-                for tool_name in tool_names
+                for tool_name in tool_names if not (self.agent_conf.get("no_faat_in_descriptions", False) and tool_name == "FindAgentActionTool")
             ]
         )
 
@@ -180,7 +181,7 @@ class Agent:
         return self.last_used_tool.get_state_description()  # type: ignore
 
     def process_high_level_action(
-        self, action: str, action_input: str, observations: Dict[str, "torch.Tensor"]
+        self, action: str, action_input: str, observations: Dict[str, "torch.Tensor"], faat_wait: bool = True, faat_other_agents_states: Optional[str]=None
     ) -> tuple["torch.Tensor", str]:
         """
         This method will consume high level actions to generate
@@ -199,9 +200,14 @@ class Agent:
         # Process the high level action
         if self._dry_run and not isinstance(tool, PerceptionTool):
             return None, f"{action} was a success"
-        low_level_action, response = tool.process_high_level_action(
-            action_input, observations
-        )
+        if action == "FindAgentActionTool":
+            low_level_action, response = tool.process_high_level_action(
+                action_input, observations, faat_wait, faat_other_agents_states
+            )
+        else:
+            low_level_action, response = tool.process_high_level_action(
+                action_input, observations
+            )
 
         # Set last used tool
         self.last_used_tool = tool

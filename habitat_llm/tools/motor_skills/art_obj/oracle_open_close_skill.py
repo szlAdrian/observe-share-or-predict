@@ -211,6 +211,10 @@ class OracleOpenSkill(OracleOpenCloseSkill):
         :return: List of argument types.
         """
         return [FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        return self.argument_types
 
 
 class OracleCloseSkill(OracleOpenCloseSkill):
@@ -245,3 +249,7 @@ class OracleCloseSkill(OracleOpenCloseSkill):
         :return: List of argument types.
         """
         return [FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        return self.argument_types

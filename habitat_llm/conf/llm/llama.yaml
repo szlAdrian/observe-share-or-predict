@@ -2,6 +2,10 @@ llm:
   _target_    : habitat_llm.llm.Llama
   _partial_   : True
 
+# Wheter to load the model in 4-bit precision. This can significantly reduce memory usage and speed up inference, 
+# but may also reduce the quality of the generated text.
+load_in_4bit : False
+
 # Put your host number here if you are using RLM
 host          : ""
 port          : 4449

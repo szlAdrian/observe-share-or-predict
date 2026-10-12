@@ -7,7 +7,7 @@
 """Implements FindAgentActionTool which is used by tool-based LLM planner
  to gather information about other agent's actions during planning """
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List, Tuple, Optional
 
 if TYPE_CHECKING:
     from habitat_llm.agent.env.environment_interface import EnvironmentInterface
@@ -71,7 +71,7 @@ class FindAgentActionTool(PerceptionTool):
         return ", ".join(states)
 
     def process_high_level_action(
-        self, input_query: str, observations: dict
+        self, input_query: str, observations: dict, faat_wait: bool = True, faat_other_agents_states: Optional[str]=None
     ) -> Tuple[None, str]:
         """
         Main entry-point method, containing logic to gather relevant information from
@@ -87,16 +87,21 @@ class FindAgentActionTool(PerceptionTool):
         if not self.env_interface:
             raise ValueError("Environment Interface not set, use set_environment")
 
-        # Wait for a few steps to give the other agent
-        # chance to process the recently assigned action
-        if self.wait_count < 10:
-            self.wait_count += 1
-            return None, ""
 
-        self.wait_count = 0
+        if faat_wait:
+            # Wait for a few steps to give the other agent
+            # chance to process the recently assigned action
+            if self.wait_count < 10:
+                self.wait_count += 1
+                return None, ""
 
-        # Extract state history from environment
-        state_history = self._get_state_history()
+            self.wait_count = 0
+
+        if faat_other_agents_states is not None:
+            state_history = faat_other_agents_states
+        else:
+            # Extract state history from environment
+            state_history = self._get_state_history()
 
         if state_history == None:
             return (
@@ -124,3 +129,12 @@ class FindAgentActionTool(PerceptionTool):
         :return: List of argument types.
         """
         return []  # NOTE: Empty as this tool is state-based, not input-based
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the MotorSkillTool.
+
+        :return: List of argument types.
+        """
+        return self.argument_types

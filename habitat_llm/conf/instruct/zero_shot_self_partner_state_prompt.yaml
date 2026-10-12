@@ -1,0 +1,265 @@
+# # partner-state
+# prompt: |-
+#         {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+#         There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+#         Rooms do not need to be explored more than once.
+#         This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+#         {agent_role_description}
+
+#         Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+#         {world_description}
+
+#         Possible Actions:
+#         {tool_descriptions}
+#         - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+#         Maintain a partner-state belief description that helps you keep track of what the other agent's location is, what object it is holding (if any), what its likely intention, what its likely next action, and what your confidence is about this information (low, med, or high).
+#         What is the next action to make progress towards completing the task? Provide your thought and the next action call as well.
+#         Always strictly follow the specified format below.
+#         Return your response in the following format
+
+#         Partner-state: <the description of the other agent's state>
+#         Thought: <reasoning for why you are taking the next action>
+#         <next action call>
+#         Assigned!
+
+#         Here is an example:
+#         Partner-state: (location: <room name|unknown>, holding: <object id|none|unknown>, likely_intention: <short intention description>, likely_next_action: <next action call>, confidence: <low|med|high>)
+#         Thought: Since there are no objects found I should explore a room I have not explored yet
+#         Explore[<room name>]
+#         Assigned!
+#         {eot_tag}{assistant_tag}
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: bottle_3: bed_45 in bedroom_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  bottle_3: bed_45 in bedroom_1<|eot_id|>
+
+
+# [DEBUG] Now Executing: {1: ('Explore', 'bedroom_2', None)}
+
+
+# ----------agent 1----------
+#  Partner_state:  location: unknown, holding: none, likely_intention: unknown, likely_next_action: unknown, confidence: low
+# Explore[bedroom_2]
+#  Assigned!
+#  ----------agent 1----------
+#  [2025-11-21 10:53:25,728][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Explore', 'bedroom_1', None), action_response='Successful execution!'
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_container_1: table_13 in bedroom_2
+# plant_saucer_0: table_13 in bedroom_2
+# bottle_3: bed_45 in bedroom_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_container_1: table_13 in bedroom_2
+# plant_saucer_0:  table_13 in bedroom_2
+# bottle_3:  bed_45 in bedroom_1<|eot_id|>
+
+
+# [DEBUG] Now Executing: {0: ('Navigate', 'table_13', None)}
+
+
+# ----------agent 0----------
+#  Partner_state:  location: unknown, holding: none, likely_intention: unknown, likely_next_action: unknown, confidence: low
+# Navigate[table_13]
+#  Assigned!
+#  ----------agent 0----------
+#  [2025-11-21 10:54:02,087][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Navigate', 'table_13', None), action_response='Successful execution!'
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_container_1: table_13 in bedroom_2
+# plant_saucer_0: table_13 in bedroom_2
+# bottle_3: bed_45 in bedroom_1
+# glass_2: cabinet_57 in kitchen_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_container_1: table_13 in bedroom_2
+# plant_saucer_0:  table_13 in bedroom_2
+# bottle_3:  bed_45 in bedroom_1
+# glass_2:  cabinet_57 in kitchen_1<|eot_id|>
+
+
+# [DEBUG] Now Executing: {0: ('Pick', 'plant_container_1', None)}
+
+
+# ----------agent 0----------
+#  Partner_state:  location: bedroom_2, holding: none, likely_intention: pick up plant, likely_next_action: pick plant_container_1, confidence: med
+# Pick[plant_container_1]
+#  Assigned!
+#  ----------agent 0----------
+#  [2025-11-21 10:54:15,929][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Pick', 'plant_container_1', None), action_response='Successful execution!'
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_container_1: held by the agent
+# plant_saucer_0: table_13 in bedroom_2
+# bottle_3: bed_45 in bedroom_1
+# glass_2: cabinet_57 in kitchen_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# WARNING: cannot get None in graph due to Node with sim_handle None not present in the graph.. Agent's state is standing
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_container_1: held by the agent
+# plant_saucer_0:  table_13 in bedroom_2
+# bottle_3:  bed_45 in bedroom_1
+# glass_2:  cabinet_57 in kitchen_1<|eot_id|>
+
+# [DEBUG] Now Executing: {0: ('Navigate', 'table_30', None)}
+
+
+# ----------agent 0----------
+#  Partner_state:  location: bedroom_2, holding: plant_container_1, likely_intention: navigate to hallway, likely_next_action: navigate to hallway, confidence: med
+# Navigate[table_30]
+#  Assigned!
+#  ----------agent 0----------
+#  [2025-11-21 10:55:16,706][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Navigate', 'table_30', None), action_response='Successful execution!'
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_container_1: held by the agent
+# plant_saucer_0: table_13 in bedroom_2
+# bottle_3: bed_45 in bedroom_1
+# glass_2: cabinet_57 in kitchen_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_container_1: held by the agent
+# plant_saucer_0:  table_13 in bedroom_2
+# bottle_3:  bed_45 in bedroom_1
+# glass_2:  cabinet_57 in kitchen_1<|eot_id|>
+
+# partner-state only
+# examples in: 2025-11-21_12-01-47-val_mini_Decentralized_Multi_Agent_React_Summary_Robot_Asymmetry_Llama-3.1-70B-Instruct_w4a16_partner_state_nf.json
+# Partner-state: (location: <room id|room name|unknown>, holding: <object id|obejct name|none|unknown>, likely_intention: <short intention description>, likely_next_action: <next action call>, confidence: <low|med|high>)
+# Partner-state: (location: unknown, holding: none, likely intention: exploring a room for the objects, confidence: <low|med|high>)
+# prompt: |-
+#         {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+#         There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+#         Rooms do not need to be explored more than once.
+#         This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+#         {agent_role_description}
+
+#         Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+#         {world_description}
+
+#         Possible Actions:
+#         {tool_descriptions}
+#         - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+#         Maintain a partner-state belief description that helps you keep track of what the other task-solving agent's location is, what object it is holding (if any), what its likely intention (a short description), and what your confidence is about this information (low, med, or high).
+#         What is the next action to make progress towards completing the task? Provide your thoughts and the next action call as well.
+#         Always strictly follow the specified format below.
+#         Return your response in the following format
+
+#         Partner-state: <the description of the other agent's state> 
+#         Thought: <reasoning for why you are taking the next action>
+#         <next action call>
+#         Assigned!
+
+#         Here is an example:
+#         Partner-state: (location: unknown, holding: none, likely intention: exploring a room for the objects, confidence: med)
+#         Thought: Since there are no objects found I should explore a room I have not explored yet
+#         Explore[<room name>]
+#         Assigned!
+#         {eot_tag}{assistant_tag}
+
+# self-state
+# prompt: |-
+#         {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+#         There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+#         Rooms do not need to be explored more than once.
+#         This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+#         {agent_role_description}
+
+#         Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+#         {world_description}
+
+#         Possible Actions:
+#         {tool_descriptions}
+#         - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+#         Maintain a self-state belief description that helps you keep track of what your location is, what object you are holding (if any), and what your confidence is about this information (low, med, or high).
+#         What is the next action to make progress towards completing the task? Provide your thoughts and the next action call as well.
+#         Always strictly follow the specified format below.
+#         Return your response in the following format
+
+#         Self-state: <the description of your state>
+#         Thought: <reasoning for why you are taking the next action>
+#         <next action call>
+#         Assigned!
+
+#         Here is an example:
+#         Self-state: (location: unknown, holding: none, confidence: med)
+#         Thought: Since there are no objects found I should explore a room I have not explored yet
+#         Explore[<room name>]
+#         Assigned!
+#         {eot_tag}{assistant_tag}
+
+# # self- and partner-state
+prompt: |-
+        {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+        There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+        Rooms do not need to be explored more than once.
+        This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+        {agent_role_description}
+
+        Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+        {world_description}
+
+        Possible Actions:
+        {tool_descriptions}
+        - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+        Maintain a self- and a partner-state belief description that helps you keep track of what your and the other agent's location is, what object you are and the other agent is holding (if any), what the other agent's likely intention is (a short description), and what your confidence is about these information (low, med, or high).
+        What is the next action to make progress towards completing the task? Provide your thoughts and the next action call as well.
+        Always strictly follow the specified format below.
+        Return your response in the following format
+
+        Self-state: <the description of your state>
+        Partner-state: <the description of the other agent's state>
+        Thought: <reasoning for why you are taking the next action>
+        <next action call>
+        Assigned!
+
+        Here is an example:
+        Self-state: (location: unknown, holding: none, confidence: med)
+        Partner-state: (location: unknown, holding: none, likely intention: exploring a room for the objects, confidence: med)
+        Thought: Since there are no objects found I should explore a room I have not explored yet
+        Explore[<room name>]
+        Assigned!
+        {eot_tag}{assistant_tag}
+
+stopword       : "Assigned!"
+end_expression : "Done[]"
+
+# The parser is a function that maps LLM output to a tuple of (agent, action, action_input)
+actions_parser:
+  _target_     : habitat_llm.llm.instruct.utils.zero_shot_action_parser
+
+  # It's a function so we do partial initialization
+  _partial_    : true

@@ -1,8 +1,10 @@
 accelerate
+bitsandbytes
 blobfile
 dill
 fastapi==0.95.1
 filelock
+httpx<1
 hydra-core
 hydra-submitit-launcher==1.2.0
 ipywidgets
@@ -13,7 +15,7 @@ networkx
 nltk
 numba==0.60.0
 numpy==1.26.4
-openai==1.10.0
+openai==1.55.3
 pandas
 peft==0.13.1
 protobuf==3.20.1

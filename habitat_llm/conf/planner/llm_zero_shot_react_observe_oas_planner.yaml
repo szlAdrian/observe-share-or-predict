@@ -1,0 +1,22 @@
+defaults:
+  - /llm@plan_config.llm: llama
+  - /instruct@plan_config.instruct: zero_shot_prompt
+
+_target_: 'habitat_llm.planner.ZeroShotReactPlanner'
+_recursive_: False
+_partial_: True
+
+plan_config:
+    replanning_threshold: 25 # max number of times the LLM is allowed to plan to finish the task
+    planning_mode: "cot"
+    constrained_generation: False
+    objects_response: True
+    objects_response_include_states: False
+    centralized: False
+    enable_rag: False # If we want to use RAG or not
+    rag_dataset_dir: "" # The path to the rag_data_source_name folder
+    rag_data_source_name: "" # rag_data_source_name folder itself
+    example_type: "react" # The prompting format
+    other_agents_action: True # Whether to include other agent's action history in the prompt
+    action_description_type: 'states' # Whether to use 'actions', 'states', or 'faat' (FindAgentActionTool) to describe the other agent's action history
+    include_only_new_actions: True # Whether to only include the other agent's new actions since the last observations or include all the actions that happend so far

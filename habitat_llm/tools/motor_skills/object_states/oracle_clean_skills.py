@@ -14,7 +14,7 @@ from habitat_llm.tools.motor_skills.object_states.oracle_object_state_skill impo
     ObjectStateSkillResult,
     OracleObjectStateInPlaceSkill,
 )
-from habitat_llm.utils.grammar import OBJECT_OR_FURNITURE
+from habitat_llm.utils.grammar import OBJECT_CLASS_OR_FURNITURE, OBJECT_OR_FURNITURE
 from habitat_llm.world_model.object_states import ObjectIsClean
 
 if TYPE_CHECKING:
@@ -124,6 +124,15 @@ class OracleCleanInPlaceSkill(OracleObjectStateInPlaceSkill):
         :return: List of argument types.
         """
         return [OBJECT_OR_FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS_OR_FURNITURE]
 
 
 class OracleCleanSkill(CompoundSkill):
@@ -156,3 +165,12 @@ class OracleCleanSkill(CompoundSkill):
         :return: List of argument types.
         """
         return [OBJECT_OR_FURNITURE]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleCleanInPlaceSkill.
+
+        :return: List of argument types.
+        """
+        return [OBJECT_CLASS_OR_FURNITURE]

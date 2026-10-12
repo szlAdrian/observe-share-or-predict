@@ -1,0 +1,409 @@
+# v1
+#prompt: |-
+#         {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+#         There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+#         Rooms do not need to be explored more than once.
+#         This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+#         {agent_role_description}
+
+#         Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+#         {world_description}
+
+#         Possible Actions:
+#         {tool_descriptions}
+#         - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+#         Maintain a task-state belief description that helps you keep track of what has been done and what needs to be done by whom to complete the task. If an object is already rearranged, then put it in the Rearranged list; if it's not yet rearranged, then put it in the Pending list.
+#         The item(s) in the lists should contain the object ID, the source location (furniture ID, floor, or unknown), the target location (furniture ID or floor), who is assigned to rearrange it (me, other, or unassigned), and your confidence about this information (low, med, or high).
+#         What is the next action to make progress towards completing the task? Provide your thought and the next action call as well.
+#         Always strictly follow the specified format below.
+#         Return your response in the following format
+
+#         Rearranged: <list of rearranged objects>
+#         Pending: <list of pending objects> 
+#         Thought: <reasoning for why you are taking the next action>
+#         <next action call>
+#         Assigned!
+
+#         Here is an example:
+#         Rearranged: [
+#         (object: <obj_id>, from: <furniture_id|floor|unknown>, to: <furniture_id|floor>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+#         ...
+#         ]
+#         Pending: [
+#         (object: <obj_id>, from: <furniture_id|floor|unknown>, to: <furniture_id|floor>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+#         ...
+#         ]
+#         Thought: Since there are no objects found I should explore a room I have not explored yet
+#         Explore[<room name>]
+#         Assigned!
+#         {eot_tag}{assistant_tag}
+
+# [DEBUG] Now Executing: {1: ('PowerOff', 'unknown_38', None)}
+
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects: No objects found yet<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# ----------agent 0----------
+#  Rearranged:  
+# Done[]
+#  Assigned!
+#  ----------agent 0----------
+#  ----------agent 1----------
+#  Rearranged:  
+# PowerOff[unknown_38]
+#  Assigned!
+#  ----------agent 1----------
+#  <|start_header_id|>user<|end_header_id|>
+#  Result:  Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects:  No objects found yet<|eot_id|>
+
+
+# [DEBUG] Now Executing: {1: ('PowerOff', 'unknown_38', None)}
+
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects: No objects found yet<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# ----------agent 1----------
+#  Rearranged:  
+# PowerOff[unknown_38]
+#  Assigned!
+#  ----------agent 1----------
+#  <|start_header_id|>user<|end_header_id|>
+#  Result:  Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects:  No objects found yet<|eot_id|>
+
+
+# [DEBUG] Now Executing: {1: ('PowerOff', 'unknown_38', None)}
+
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects: No objects found yet<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# ----------agent 1----------
+#  Rearranged:  
+# PowerOff[unknown_38]
+#  Assigned!
+#  ----------agent 1----------
+#  <|start_header_id|>user<|end_header_id|>
+#  Result:  Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects:  No objects found yet<|eot_id|>
+
+
+# [DEBUG] Now Executing: {1: ('PowerOff', 'unknown_38', None)}
+
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects: No objects found yet<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# ----------agent 1----------
+#  Rearranged:  
+# PowerOff[unknown_38]
+#  Assigned!
+#  ----------agent 1----------
+#  <|start_header_id|>user<|end_header_id|>
+#  Result:  Unexpected failure! - The targeted object does not afford the state: is_powered_on
+
+# ...
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects: No objects found yet<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# ----------agent 1----------
+#  It seems like the previous action was not successful. Let's try a different approach. Since there are no objects found yet, I should explore a room I have not explored yet to find the plant and plant saucer. I will start with the bedroom_1 room, but since the task is to move the plant and plant saucer from the bedroom to the hallway, I will explore the bedroom_2 room instead, to see if the objects are there. If not, I will explore the bedroom_1 room next. Here is my revised response:  
+# PowerOff[unknown_38]
+#  Assigned!
+#  ----------agent 1----------
+#  <|start_header_id|>user<|end_header_id|>
+#  Result:  Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects:  No objects found yet<|eot_id|>
+
+
+# [DEBUG] Now Executing: {1: ('PowerOff', 'unknown_38', None)}
+
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects: No objects found yet<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# ----------agent 1----------
+#  Rearranged:  
+# PowerOff[unknown_38]
+#  Assigned!
+#  ----------agent 1----------
+#  <|start_header_id|>user<|end_header_id|>
+#  Result:  Unexpected failure! - The targeted object does not afford the state: is_powered_on
+# Objects:  No objects found yet<|eot_id|>
+
+#v1 oneliner
+# prompt: |-
+#         {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+#         There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+#         Rooms do not need to be explored more than once.
+#         This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+#         {agent_role_description}
+
+#         Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+#         {world_description}
+
+#         Possible Actions:
+#         {tool_descriptions}
+#         - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+#         Maintain a task-state belief description that helps you keep track of what has been done and what needs to be done by whom to complete the task. If an object is already rearranged, then put it in the Rearranged list; if it's not yet rearranged, then put it in the Pending list.
+#         The item(s) in the lists should contain the object ID, the source location (furniture ID, floor, or unknown), the target location (furniture ID or floor), who is assigned to rearrange it (me, other, or unassigned), and your confidence about this information (low, med, or high).
+#         What is the next action to make progress towards completing the task? Provide your thought and the next action call as well.
+#         Always strictly follow the specified format below.
+#         Return your response in the following format
+
+#         Rearranged: <list of rearranged objects> Pending: <list of pending objects> Thought: <reasoning for why you are taking the next action>
+#         <next action call>
+#         Assigned!
+
+#         Here is an example:
+#         Rearranged: [(object: <obj_id>, from: <furniture_id|floor|unknown>, to: <furniture_id|floor>, assigned: <me|other|unassigned>, confidence: <low|med|high>),...] Pending: [(object: <obj_id>, from: <furniture_id|floor|unknown>, to: <furniture_id|floor>, assigned: <me|other|unassigned>, confidence: <low|med|high>),...] Thought: Since there are no objects found I should explore a room I have not explored yet
+#         Explore[<room name>]
+#         Assigned!
+#         {eot_tag}{assistant_tag}
+
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: bottle_3: bed_45 in bedroom_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  bottle_3: bed_45 in bedroom_1<|eot_id|>
+
+
+# [DEBUG] Now Executing: {1: ('Explore', 'bedroom_2', None)}
+
+
+# ----------agent 1----------
+#  Rearranged:  None Pending: None Thought: I found a bottle, but it's not the plant or plant saucer I'm looking for. I'll explore another room to see if I can find the plant and plant saucer. I'll move to bedroom_2.
+# Explore[bedroom_2]
+#  Assigned!
+#  ----------agent 1----------
+#  [2025-11-21 10:42:21,895][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Explore', 'bedroom_1', None), action_response='Successful execution!'
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_saucer_0: table_13 in bedroom_2
+# plant_container_1: table_13 in bedroom_2
+# bottle_3: bed_45 in bedroom_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_saucer_0: table_13 in bedroom_2
+# plant_container_1:  table_13 in bedroom_2
+# bottle_3:  bed_45 in bedroom_1<|eot_id|>
+# [DEBUG] Now Executing: {0: ('Rearrange', 'plant_saucer_0, on, table_30, None, None', None)}
+
+
+# ----------agent 0----------
+#  Rearranged:  None Pending: 
+# Rearrange[plant_saucer_0, on, table_30, None, None]
+#  Assigned!
+#  ----------agent 0----------
+#  [2025-11-21 10:43:00,395][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('AtomicSkills.NAV_OBJ', 'plant_saucer_0', 'success'), action_response='success'
+# [2025-11-21 10:43:00,469][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('AtomicSkills.PICK', 'plant_saucer_0', 'success'), action_response='success'
+# [2025-11-21 10:43:14,428][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('AtomicSkills.NAV_REC', 'table_30', 'success'), action_response='success'
+# [2025-11-21 10:43:14,507][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Rearrange', 'plant_saucer_0, on, table_30, None, None', None), action_response='Successful execution!'
+# Edge doesn't exist between the two nodes:plant_saucer_0, agent_0
+# [2025-11-21 10:43:14,508][habitat_llm.world_model.dynamic_world_graph][INFO] - Moved plant_saucer_0 from agent_0 to table_30
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_saucer_0: table_30 in hallway_1
+# plant_container_1: table_13 in bedroom_2
+# bottle_3: bed_45 in bedroom_1
+# glass_2: cabinet_57 in kitchen_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_saucer_0: table_30 in hallway_1
+# plant_container_1:  table_13 in bedroom_2
+# bottle_3:  bed_45 in bedroom_1
+# glass_2:  cabinet_57 in kitchen_1<|eot_id|>
+
+
+# [DEBUG] Now Executing: {0: ('Rearrange', 'plant_container_1, on, table_30, None, None', None)}
+
+
+# ----------agent 0----------
+#  Rearranged:  
+# Rearrange[plant_container_1, on, table_30, None, None]
+#  Assigned!
+#  ----------agent 0----------
+
+# ...
+
+# [DEBUG] Now Executing: {1: ('Explore', 'bedroom_1', None)}
+
+
+# ----------agent 1----------
+#  Rearranged:  None Pending: None Thought: I found the plant saucer and plant container, but they are already in the hallway, which is the target location. However, the task also mentions moving them from the bedroom to the hallway, so I'm not sure if the other agent has already moved them or if they were already there. I'll explore the bedroom again to see if I can find any other objects that need to be moved.
+# Explore[bedroom_1]
+#  Assigned!
+#  ----------agent 1----------
+#  [2025-11-21 10:44:52,833][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('AtomicSkills.NAV_REC', 'table_30', 'success'), action_response='success'
+# [2025-11-21 10:44:52,907][habitat_llm.world_model.dynamic_world_graph][DEBUG] - agent_uid=0: high_level_action=('Rearrange', 'bottle_3, on, table_30, None, None', None), action_response='Successful execution!'
+# Edge doesn't exist between the two nodes:bottle_3, agent_0
+# [2025-11-21 10:44:52,908][habitat_llm.world_model.dynamic_world_graph][INFO] - Moved bottle_3 from agent_0 to table_30
+# <|start_header_id|>user<|end_header_id|>
+
+# Result: Successful execution!
+# Objects: plant_saucer_0: table_30 in hallway_1
+# plant_container_1: table_30 in hallway_1
+# bottle_3: table_30 in hallway_1
+# glass_2: cabinet_57 in kitchen_1<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+# <|start_header_id|>user<|end_header_id|>
+#  Result:  Successful execution!
+# Objects:  plant_saucer_0: table_30 in hallway_1
+# plant_container_1:  table_30 in hallway_1
+# bottle_3:  table_30 in hallway_1
+# glass_2:  cabinet_57 in kitchen_1<|eot_id|>
+
+
+# [DEBUG] Now Executing: {0: ('Rearrange', 'glass_2, on, table_30, None, None', None)}
+
+
+# ----------agent 0----------
+#  Rearranged:  
+# Rearrange[glass_2, on, table_30, None, None]
+#  Assigned!
+#  ----------agent 0----------
+
+# Changes:
+# Only put the mentioned objects in the task in these lists.
+# deleted "floor" from source and target location options in the task state description.
+# rearranged and pending lists order swapped.
+# prompt: |-
+#         {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+#         There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+#         Rooms do not need to be explored more than once.
+#         This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+#         {agent_role_description}
+
+#         Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+#         {world_description}
+
+#         Possible Actions:
+#         {tool_descriptions}
+#         - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+#         Maintain a task-state belief description that helps you keep track of what has been done and what needs to be done by whom to complete the task. If an object is already rearranged, then put it in the Rearranged list; if it's not yet rearranged, then put it in the Pending list. Only put the mentioned objects in the task in these lists.
+#         The item(s) in the lists should contain the object ID, the source location (furniture ID, or unknown), the target location (furniture ID or unknown), who is assigned to rearrange it (me, other, or unassigned), and your confidence about this information (low, med, or high).
+#         What is the next action to make progress towards completing the task? Provide your thought and the next action call as well.
+#         Always strictly follow the specified format below.
+#         Return your response in the following format
+
+#         Pending: <list of pending objects>
+#         Rearranged: <list of rearranged objects>
+#         Thought: <reasoning for why you are taking the next action>
+#         <next action call>
+#         Assigned!
+
+#         Here is an example:
+#         Pending: [
+#         (object: <obj_id>, from: <furniture_id|unknown>, to: <furniture_id|unknown>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+#         ...
+#         ]
+#         Rearranged: [
+#         (object: <obj_id>, from: <furniture_id|unknown>, to: <furniture_id|unknown>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+#         ...
+#         ]
+#         Thought: Since there are no objects found I should explore a room I have not explored yet
+#         Explore[<room name>]
+#         Assigned!
+#         {eot_tag}{assistant_tag}
+
+# v3: removed location name from 'to'
+# added:  You can only place an object in one list.
+# object's original place in the house (furniture ID in room ID, or location name), the object's requested place
+prompt: |-
+        {system_tag}You are an agent that solves multi-agent planning problems. The task assigned to you will be situated in a house and will generally involve navigating to objects, picking and placing them on different receptacles to achieve rearrangement. You strictly follow any format specifications and pay attention to the previous actions taken in order to avoid repeating mistakes. Rooms do not need to be explored more than once.
+
+        There will be another agent trying to solve the same task that you are at the same time. You may find that that agent has picked up relevant objects or is in the process of completing parts of the task. If that is the case you may want to move on to a different part of the task.
+
+        Rooms do not need to be explored more than once.
+        This means if you have explored the living room and have not found the object, then you should explore the kitchen, if a relevant object is still not found, you should explore the hallway etc...
+
+        {agent_role_description}
+
+        Many calls to the same action in a row are a sign that something has gone wrong and you should try a different action.{eot_tag}{rag_examples}{user_tag}Task: {input}
+
+        {world_description}
+
+        Possible Actions:
+        {tool_descriptions}
+        - Done: Used to indicate that the agent has finished the task. Example (Done[])
+
+        Maintain a task-state belief description that helps you keep track of what has been done and what needs to be done by whom to complete the task. If an object is rearranged into its requested place, then put it in the Rearranged list; if it is under rearrangement (i.e., somebody is holding it), then put it in the Under rearrangement list; if its rearrangement has not started yet, then put it in the Pending list. 
+        Only put the mentioned objects in the task in these lists. You can only place an object in one list. You may leave some lists empty if there are no objects that fit the criteria of that list. 
+        The item(s) in the lists should contain the object ID (or object name), the object's original place in the house (furniture ID in room ID, or location name), the object's requested place (furniture ID in room ID), who is assigned to rearrange it (me, other, or unassigned), and your confidence about this information (low, med, or high).
+        What is the next action to make progress towards completing the task? Provide your thought and the next action call as well.
+        Always strictly follow the specified format below.
+        Return your response in the following format
+
+        Pending: <list of pending objects>
+        Under rearrangement: <list of under rearrangement objects>
+        Rearranged: <list of rearranged objects>
+        Thought: <reasoning for why you are taking the next action>
+        <next action call>
+        Assigned!
+
+        Here is an example:
+        Pending: [
+        (object: <obj_id|obj_name>, from: <furniture_id in room_id|location_name>, to: <furniture_id in room_id>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+        ...
+        ]
+        Under rearrangement: [
+        (object: <obj_id|obj_name>, from: <furniture_id in room_id|location_name>, to: <furniture_id in room_id>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+        ...
+        ]
+        Rearranged: [
+        (object: <obj_id|obj_name>, from: <furniture_id in room_id|location_name>, to: <furniture_id in room_id>, assigned: <me|other|unassigned>, confidence: <low|med|high>)
+        ...
+        ]
+        Thought: Since there are no objects found I should explore a room I have not explored yet
+        Explore[<room name>]
+        Assigned!
+        {eot_tag}{assistant_tag}
+
+
+stopword       : "Assigned!"
+end_expression : "Done[]"
+
+# The parser is a function that maps LLM output to a tuple of (agent, action, action_input)
+actions_parser:
+  _target_     : habitat_llm.llm.instruct.utils.zero_shot_action_parser
+
+  # It's a function so we do partial initialization
+  _partial_    : true

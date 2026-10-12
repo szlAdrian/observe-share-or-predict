@@ -8,7 +8,7 @@ import torch
 
 # Local
 from habitat_llm.tools.motor_skills.nn_skill import NnSkillPolicy
-from habitat_llm.utils.grammar import NAV_TARGET
+from habitat_llm.utils.grammar import NAV_TARGET, NAV_TARGET_OBJECT_CLASS
 
 
 class NavSkillPolicy(NnSkillPolicy):
@@ -59,3 +59,15 @@ class NavSkillPolicy(NnSkillPolicy):
         :return: List of argument types.
         """
         return [NAV_TARGET]
+    
+    @property
+    def argument_obj_class_types(self) -> List[str]:
+        """
+        Returns the types of arguments required for the OracleNavSkill.
+
+        Right now only allowing objects, furniture and rooms as this is all the
+        planner can reason about.
+
+        :return: List of argument types.
+        """
+        return [NAV_TARGET_OBJECT_CLASS]
